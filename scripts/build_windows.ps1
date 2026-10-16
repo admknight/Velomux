@@ -121,7 +121,7 @@ if (-not ((Test-Path -LiteralPath $ffmpeg -PathType Leaf) -and (Test-Path -Liter
             Fail 'FFmpeg and ffprobe must come from the same tool distribution.'
         }
         $sourceDir = Split-Path -Parent $tool1.Source
-        if ($sourceDir -match '(?i)[\\/]chocolatey[\\/]bin {
+        if ($sourceDir -match '(?i)[\\/]chocolatey[\\/]bin$') {
             $sourceDir = $null
             $chocoHome = if ($env:ChocolateyInstall) { $env:ChocolateyInstall } else { 'C:\ProgramData\chocolatey' }
             $toolsRoot = Join-Path $chocoHome 'lib\ffmpeg\tools'
