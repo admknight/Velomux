@@ -6,7 +6,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 from PySide6.QtCore import QPoint, QPointF, Qt
 from PySide6.QtGui import QWheelEvent
-from PySide6.QtWidgets import QApplication, QComboBox, QDoubleSpinBox, QSpinBox
+from PySide6.QtWidgets import (QApplication, QComboBox, QDoubleSpinBox, QLabel,
+                               QScrollArea, QSpinBox, QVBoxLayout, QWidget)
 
 from modern_app import (
     MainWindow, WheelSafeComboBox, WheelSafeDoubleSpinBox, WheelSafeSpinBox,
@@ -107,3 +108,29 @@ def test_every_numeric_and_combobox_setting_uses_wheel_safety(qt_app):
             assert before == after, f"Settings changed while scrolling: {widget!r}"
     finally:
         window.close()
+
+
+def test_mouse_wheel_scrolls_container_instead_of_changing_gain(qt_app):
+    scroll = QScrollArea()
+    scroll.resize(280, 150)
+    scroll.setWidgetResizable(True)
+    inner = QWidget()
+    layout = QVBoxLayout(inner)
+    gain = WheelSafeDoubleSpinBox()
+    gain.setRange(-40, 40)
+    gain.setValue(2.5)
+    layout.addWidget(QLabel("GAIN · dB"))
+    layout.addWidget(gain)
+    for n in range(15):
+        layout.addWidget(QLabel(f"Additional settings row {n}"))
+    scroll.setWidget(inner)
+    scroll.show()
+    qt_app.processEvents()
+    bar = scroll.verticalScrollBar()
+    assert bar.maximum() > 0, "Test settings page must be scrollable"
+    bar.setValue(0)
+    send_wheel(gain, -120)
+    qt_app.processEvents()
+    assert gain.value() == 2.5, "Scrolling should not change gain"
+    assert bar.value() > 0, "The wheel should scroll the parent settings page"
+    scroll.close()
