@@ -12,15 +12,15 @@ from pathlib import Path
 import subprocess
 import sys
 import threading
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 import json
 
 from PySide6.QtCore import Qt, QSettings, QThread, Signal, QUrl, QSize
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QKeySequence, QShortcut, QIcon, QPainter, QBrush, QPixmap, QPen
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFrame,
-    QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
+    QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFrame,
+    QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
     QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSpinBox, QSplitter,
     QStackedWidget, QStyle, QTabWidget, QTableWidget, QTableWidgetItem,
     QTextEdit, QVBoxLayout, QWidget, QHeaderView, QAbstractItemView,
@@ -46,14 +46,16 @@ DANGER = '#FF7E9A'
 
 STYLE = '''
 QWidget { background: #090E19; color: #F0F4FA; font-family: "Segoe UI", "Inter", Arial; font-size: 10pt; }
+QLabel { background: transparent; border: none; }
+QWidget#SettingsInner { background: #11192A; }
 QWidget#MainArea { background: #090E19; }
 QFrame#SideBar { background: #0F1727; border-right: 1px solid #243047; }
-QFrame#Panel, QFrame#Card, QFrame#MiniCard { background: #11192A; border: 1px solid #243047; border-radius: 16px; }
+QFrame#Panel, QFrame#Card, QFrame#MiniCard { background: #11192A; border: 1px solid #2B3A52; border-radius: 16px; }
 QFrame#MiniCard { border-radius: 13px; }
 QFrame#DropZone { background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #22254D,stop:1 #10343D); border: 1px dashed #686FBF; border-radius: 14px; }
-QLabel#Title { font-size: 24pt; font-weight: 800; color: #F5F8FF; }
+QLabel#Title { font-size: 22pt; font-weight: 750; color: #F5F8FF; }
 QLabel#SubTitle { font-size: 9pt; color: #96A6BC; }
-QLabel#Section { font-size: 14pt; font-weight: 700; }
+QLabel#Section { font-size: 13pt; font-weight: 720; }
 QLabel#Caption { font-size: 9pt; color: #96A6BC; }
 QLabel#Logo { background: transparent; border: none; }
 QLabel#MetricValue { font-size: 19pt; font-weight: 800; }
@@ -87,6 +89,12 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
 QTableWidget { background: #11192A; alternate-background-color: #141F32; gridline-color: transparent; border: none; selection-background-color: #28395D; selection-color: #F5F7FF; outline: none; }
 QTableWidget::item { padding-left: 7px; border-bottom: 1px solid #1C2A40; }
 QTableWidget::item:selected { background: #28395D; }
+QListWidget#PresetLibrary { background: #121F32; border: 1px solid #2D405B; border-radius: 10px; font-size: 10pt; outline: none; }
+QListWidget#PresetLibrary::item { padding: 10px 9px; border-bottom: 1px solid #26354B; }
+QListWidget#PresetLibrary::item:selected { background: #393A72; color: #FFFFFF; border-left: 3px solid #958CFF; }
+QListWidget#PresetLibrary::item:hover:!selected { background: #202F47; }
+QLabel#ErrorBanner { background: #3A2130; border: 1px solid #855060; border-radius: 10px; color: #FFD2DC; padding: 10px 12px; font-size: 10pt; }
+QFrame#ToolBadge { background: #16312E; border: none; border-radius: 10px; }
 QHeaderView::section { background: #172237; color: #99ACC6; font-size: 9pt; font-weight: 700; padding: 12px 8px; border: none; border-bottom: 1px solid #293750; }
 QProgressBar { background: #243147; color: #F8FAFD; border-radius: 5px; border: none; text-align: center; min-height: 9px; }
 QProgressBar::chunk { background: #8980FF; border-radius: 5px; }
@@ -98,7 +106,7 @@ QSplitter::handle { background: transparent; width: 10px; }
 def label(text: str, object_name: str = 'Caption') -> QLabel:
     obj = QLabel(text)
     obj.setObjectName(object_name)
-    obj.setWordWrap(True)
+    obj.setWordWrap(object_name not in ('Title', 'Section', 'MetricValue', 'MetricLabel'))
     return obj
 
 
@@ -220,8 +228,13 @@ class UpdateWorker(QThread):
             if not tag or not page.startswith('https://github.com/'):
                 raise ValueError('Unexpected release API response.')
             self.result_ready.emit(f'Latest published release: {tag}\nYour installed version: {APP_VERSION}\nReview the verified release and download it at:\n{page}')
-        except (OSError, ValueError, URLError) as exc:
-            self.result_ready.emit('Could not check GitHub Releases: ' + str(exc))
+        except HTTPError as exc:
+            if exc.code == 404:
+                self.result_ready.emit('No public Velomux release is available yet. This is a private development preview; new builds are currently shared as GitHub Actions test artifacts.')
+            else:
+                self.result_ready.emit(f'Update service returned HTTP {exc.code}. Your installed converter remains available offline.')
+        except (OSError, ValueError, URLError):
+            self.result_ready.emit('Unable to check for updates right now. Local conversion is unaffected; try again when connected.')
 
 
 def nav_icon(kind: str) -> QIcon:
