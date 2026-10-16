@@ -1,0 +1,123 @@
+name: Stage reviewed Windows GitHub release (DRAFT only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag matching version.py (example: v0.2.1-preview)'
+        required: true
+        type: string
+      reviewer_confirmed:
+        description: 'Confirm manual licensing, authenticity, update, and Windows test review'
+        required: true
+        type: boolean
+
+# No auto-publication. Build has read-only access; only the final draft-creation
+# job has write access, and only after all Windows QA/build gates pass.
+permissions:
+  contents: read
+
+jobs:
+  validated-build:
+    if: inputs.reviewer_confirmed
+    runs-on: windows-2022
+    timeout-minutes: 80
+    steps:
+      - name: Check out the exact existing release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+      - name: Install build Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: 'x64'
+      - name: Check release tag against actual source version
+        shell: pwsh
+        env:
+          TARGET_TAG: ${{ inputs.tag }}
+        run: |
+          $actualTag = (git describe --tags --exact-match).Trim()
+          if ($actualTag -ne $env:TARGET_TAG) { throw 'Release source is not at the requested existing tag.' }
+          $version = (python -c "from version import APP_VERSION; print(APP_VERSION)").Trim()
+          if ($env:TARGET_TAG -ne "v$version") { throw "Tag $env:TARGET_TAG does not match application version $version" }
+          $officialRepo = (python -c "from version import GITHUB_REPOSITORY; print(GITHUB_REPOSITORY)").Trim()
+          if ($officialRepo -ne $env:GITHUB_REPOSITORY) {
+            throw "Set the approved official repository in version.py before tagging a release; expected $env:GITHUB_REPOSITORY, got $officialRepo"
+          }
+      - name: Stage reviewed, SHA-256-verified FFmpeg distribution
+        shell: pwsh
+        run: .\scripts\stage_reviewed_ffmpeg.ps1
+      - name: Install official Inno Setup 7.1.0
+        shell: pwsh
+        run: |
+          $url = 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe'
+          $file = Join-Path $env:RUNNER_TEMP 'innosetup-7.1.0-x64.exe'
+          Invoke-WebRequest -Uri $url -OutFile $file
+          $signature = Get-AuthenticodeSignature -FilePath $file
+          if ($signature.Status -ne 'Valid' -or
+              $signature.SignerCertificate.Subject -notmatch 'Pyrsys B.V.') {
+            throw 'Inno Setup installer signature is invalid/unexpected.'
+          }
+          $p = Start-Process -FilePath $file -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-') -PassThru -Wait
+          if ($p.ExitCode -ne 0) { throw "Failed to install Inno Setup: $($p.ExitCode)" }
+      - name: Compile legally gated release candidate and run frozen GUI smoke test
+        shell: pwsh
+        run: .\scripts\build_windows.ps1 -ForDistribution -Installer
+      - name: Test real Windows installer with install/execute/uninstall
+        shell: pwsh
+        run: .\scripts\test_installer_windows.ps1
+      - name: Prepare release assets and SHA-256 manifest
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force 'dist\release-assets' | Out-Null
+          $inputs = @(
+            'dist\installer\Velomux-Setup-0.2.1-preview-Win-x64.exe',
+            'dist\Velomux-Windows-Portable-x64.zip'
+          )
+          $checksums = foreach ($file in $inputs) {
+            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Missing release candidate $file" }
+            $basename = [IO.Path]::GetFileName($file)
+            Copy-Item -LiteralPath $file -Destination (Join-Path 'dist\release-assets' $basename)
+            "$((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant())  $basename"
+          }
+          $checksums | Set-Content -LiteralPath 'dist\release-assets\SHA256SUMS.txt' -Encoding utf8
+          @(
+            "Tag: $env:GITHUB_REF_NAME",
+            "Commit: $(git rev-parse HEAD)",
+            "Runner: $env:RUNNER_OS",
+            "Build Python: $(& .\.venv\Scripts\python.exe --version)",
+            "Bundled FFmpeg: $(& .\vendor\ffmpeg\bin\ffmpeg.exe -version | Select-Object -First 1)",
+            "Installed build packages:",
+            (& .\.venv\Scripts\python.exe -m pip freeze)
+          ) | Set-Content -LiteralPath 'dist\release-assets\BUILD_PROVENANCE.txt' -Encoding utf8
+      - name: Upload verified release candidate for draft creation
+        uses: actions/upload-artifact@v4
+        with:
+          name: reviewed-windows-release-candidate
+          path: dist/release-assets/*
+          if-no-files-found: error
+
+  create-draft:
+    needs: validated-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download validated assets from same workflow
+        uses: actions/download-artifact@v4
+        with:
+          name: reviewed-windows-release-candidate
+          path: candidate
+      - name: Create draft release ONLY (manual publication separately required)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TARGET_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release create "$TARGET_TAG" candidate/* \
+            --verify-tag --draft --prerelease --latest=false \
+            --title "Velomux $TARGET_TAG" --generate-notes
