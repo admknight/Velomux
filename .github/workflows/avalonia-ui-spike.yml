@@ -64,7 +64,15 @@ jobs:
           if ($events -notmatch 'DESKTOP_STARTUP_TEST: PASS') {
             throw 'The executable exited without proving MainWindow.Opened and IsVisible=true.'
           }
-          Write-Host 'PASS: actual Windows published executable created a visible Avalonia main window.'
+          $image = Join-Path $PWD 'avalonia-spike/publish/ui-qa/Avalonia-Windows-Startup.png'
+          if (-not (Test-Path -LiteralPath $image -PathType Leaf)) {
+            throw 'No real rendered Windows GUI screenshot was captured.'
+          }
+          if ((Get-Item -LiteralPath $image).Length -lt 5000) {
+            throw 'GUI screenshot is empty or incomplete.'
+          }
+          Write-Host "Captured GUI visual-review evidence: $image"
+          Write-Host 'PASS: published Windows EXE opened, verified UI initial state, and rendered a screenshot.'
       - name: Include Windows startup diagnostics and software fallback
         shell: pwsh
         run: |
