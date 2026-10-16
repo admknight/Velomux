@@ -16,10 +16,10 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 import json
 
-from PySide6.QtCore import Qt, QSettings, QThread, Signal, QUrl, QSize
-from PySide6.QtGui import QColor, QDesktopServices, QFont, QKeySequence, QShortcut, QIcon, QPainter, QBrush, QPixmap, QPen
+from PySide6.QtCore import Qt, QSettings, QThread, Signal, QUrl, QSize, QPointF
+from PySide6.QtGui import QColor, QDesktopServices, QFont, QKeySequence, QShortcut, QIcon, QPainter, QBrush, QPixmap, QPen, QWheelEvent
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFrame,
+    QAbstractScrollArea, QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFrame,
     QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
     QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSpinBox, QSplitter,
     QStackedWidget, QStyle, QTabWidget, QTableWidget, QTableWidgetItem,
@@ -101,6 +101,64 @@ QProgressBar::chunk { background: #8980FF; border-radius: 5px; }
 QTextEdit { background: #0D1627; color: #C2D0E2; border: 1px solid #26364F; border-radius: 11px; padding: 10px; font-family: "Cascadia Code", Consolas; font-size: 9pt; }
 QSplitter::handle { background: transparent; width: 10px; }
 '''
+
+
+def _scroll_settings_wheel(widget: QWidget, event: QWheelEvent) -> None:
+    """Send wheel input to a scroll area, never to a settings value editor.
+
+    A generic event.ignore() protects the setting but is insufficient for some
+    Qt delivery paths: hovering a focused spin box can stop page scrolling.
+    Forward the original wheel delta to the scroll-area viewport. A nested tab
+    scrolls first; if it is already at the requested limit, its outer settings
+    pane can scroll instead. Preserve high-resolution trackpad wheel deltas.
+    """
+    delta = event.angleDelta().y() or event.pixelDelta().y()
+    parent = widget.parentWidget()
+    while parent is not None:
+        if isinstance(parent, QAbstractScrollArea):
+            bar = parent.verticalScrollBar()
+            if bar.maximum() > bar.minimum():
+                at_limit = (
+                    (delta > 0 and bar.value() <= bar.minimum()) or
+                    (delta < 0 and bar.value() >= bar.maximum())
+                )
+                if not at_limit:
+                    viewport = parent.viewport()
+                    local = viewport.mapFromGlobal(event.globalPosition().toPoint())
+                    forwarded = QWheelEvent(
+                        QPointF(local), event.globalPosition(),
+                        event.pixelDelta(), event.angleDelta(),
+                        event.buttons(), event.modifiers(),
+                        event.phase(), event.inverted()
+                    )
+                    previous = bar.value()
+                    QApplication.sendEvent(viewport, forwarded)
+                    if forwarded.isAccepted() or bar.value() != previous:
+                        event.accept()
+                        return
+        parent = parent.parentWidget()
+    event.ignore()
+
+
+class WheelSafeSpinBox(QSpinBox):
+    """Keep numeric settings fixed when using the wheel to scroll."""
+
+    def wheelEvent(self, event):
+        _scroll_settings_wheel(self, event)
+
+
+class WheelSafeDoubleSpinBox(QDoubleSpinBox):
+    """Keep precision settings fixed when using the wheel to scroll."""
+
+    def wheelEvent(self, event):
+        _scroll_settings_wheel(self, event)
+
+
+class WheelSafeComboBox(QComboBox):
+    """Prevent wheel-driven selection changes, but retain popup navigation."""
+
+    def wheelEvent(self, event):
+        _scroll_settings_wheel(self, event)
 
 
 def label(text: str, object_name: str = 'Caption') -> QLabel:
@@ -468,7 +526,7 @@ class MainWindow(QMainWindow):
         column = vbox(11)
         column.addWidget(label('Conversion settings', 'Section'))
         column.addWidget(label('Choose from the format library, then fine-tune only when needed.'))
-        self.family = QComboBox()
+        self.family = WheelSafeComboBox()
         self.family.addItems(['Audio', 'Video', 'Image'])
         self.family.currentTextChanged.connect(self._update_presets)
         self._group_input(column, 'MEDIA CATEGORY', self.family)
@@ -485,14 +543,14 @@ class MainWindow(QMainWindow):
         self.preset_list.setMaximumHeight(196)
         self.preset_list.currentItemChanged.connect(self._choose_list_preset)
         column.addWidget(self.preset_list)
-        self.preset = QComboBox()
+        self.preset = WheelSafeComboBox()
         self.preset.setEditable(True)
         self.preset.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.preset.completer().setFilterMode(Qt.MatchFlag.MatchContains)
         self.preset.completer().setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self.preset.currentTextChanged.connect(self._sync_preset_list)
         self._group_input(column, 'SELECTED OUTPUT FORMAT', self.preset)
-        self.mode = QComboBox()
+        self.mode = WheelSafeComboBox()
         self.mode.addItems(['Quick mode', 'Advanced mode'])
         self._group_input(column, 'CONTROLS MODE', self.mode)
         self.mode.currentIndexChanged.connect(self._toggle_mode)
@@ -603,14 +661,14 @@ class MainWindow(QMainWindow):
         return input_widget
 
     def _spin(self, minimum=0, maximum=32768, value=0, special=None):
-        obj = QSpinBox()
+        obj = WheelSafeSpinBox()
         obj.setRange(minimum, maximum)
         obj.setValue(value)
         if special: obj.setSpecialValueText(special)
         return obj
 
     def _float_spin(self, minimum=0, maximum=36000, value=0, step=0.5, special=None):
-        obj = QDoubleSpinBox()
+        obj = WheelSafeDoubleSpinBox()
         obj.setRange(minimum,maximum)
         obj.setDecimals(2)
         obj.setSingleStep(step)
@@ -629,7 +687,7 @@ class MainWindow(QMainWindow):
         line.addWidget(button('Browse', self.browse_destination))
         l.addWidget(label('CUSTOM OUTPUT DIRECTORY'))
         l.addLayout(line)
-        self.collision = QComboBox()
+        self.collision = WheelSafeComboBox()
         self.collision.addItem('Repair incomplete; skip verified', 'repair')
         self.collision.addItem('Always replace output', 'overwrite')
         self.collision.addItem('Skip existing files', 'skip')
@@ -650,14 +708,14 @@ class MainWindow(QMainWindow):
     def _video_tab(self) -> QWidget:
         w,l = self._tab_shell()
         self.crf = self._group_input(l,'VIDEO CRF · QUALITY', self._spin(0,51,23))
-        self.encoder_speed = QComboBox()
+        self.encoder_speed = WheelSafeComboBox()
         self.encoder_speed.addItems(['ultrafast','superfast','veryfast','faster','fast','medium','slow','slower','veryslow'])
         self.encoder_speed.setCurrentText('medium')
         self._group_input(l,'ENCODER SPEED',self.encoder_speed)
         self.video_width = self._group_input(l,'MAX WIDTH (PIXELS)', self._spin(0,8192,0,'Original'))
         self.video_height = self._group_input(l,'MAX HEIGHT (PIXELS)', self._spin(0,8192,0,'Original'))
         self.video_fps = self._group_input(l,'OUTPUT FPS', self._float_spin(0,240,0,1,'Source FPS'))
-        self.video_rotate = QComboBox()
+        self.video_rotate = WheelSafeComboBox()
         self.video_rotate.addItems(['0','90','180','270'])
         self._group_input(l,'ROTATION CLOCKWISE',self.video_rotate)
         self.deinterlace = QCheckBox('Deinterlace video (YADIF)')
@@ -672,7 +730,7 @@ class MainWindow(QMainWindow):
         w,l = self._tab_shell()
         self.audio_bitrate = self._group_input(l,'BITRATE · KBPS',self._spin(0,512,0,'Preset default'))
         self.sample_rate = self._group_input(l,'SAMPLE RATE · HZ',self._spin(0,192000,0,'Source'))
-        self.channels = QComboBox()
+        self.channels = WheelSafeComboBox()
         for text,val in [('Source',0),('Mono',1),('Stereo',2),('5.1',6),('7.1',8)]:
             self.channels.addItem(text,val)
         self._group_input(l,'CHANNELS',self.channels)
@@ -688,10 +746,10 @@ class MainWindow(QMainWindow):
         self.image_width = self._group_input(l,'MAX WIDTH · PX',self._spin(0,32768,0,'Source'))
         self.image_height = self._group_input(l,'MAX HEIGHT · PX',self._spin(0,32768,0,'Source'))
         self.image_quality = self._group_input(l,'IMAGE QUALITY · PRESET OR 1–100',self._spin(0,100,0,'Preset default'))
-        self.image_rotate = QComboBox()
+        self.image_rotate = WheelSafeComboBox()
         self.image_rotate.addItems(['0','90','180','270'])
         self._group_input(l,'ROTATE CLOCKWISE',self.image_rotate)
-        self.image_flip = QComboBox()
+        self.image_flip = WheelSafeComboBox()
         self.image_flip.addItems(['none','horizontal','vertical'])
         self._group_input(l,'FLIP',self.image_flip)
         self.grayscale = QCheckBox('Convert to grayscale')

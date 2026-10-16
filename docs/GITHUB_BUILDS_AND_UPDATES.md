@@ -14,7 +14,7 @@
 2. Open **Actions > Build Windows test installer > Run workflow** on the desired branch.
 3. The Windows runner installs a build-only Python 3.12, test-only FFmpeg, and signature-verified Inno Setup 7.1.0, then performs source tests and constructs the actual Qt UI offscreen.
 4. PyInstaller creates `Velomux.exe` with bundled dependencies. The workflow runs two checks against this **frozen executable**: its tool/asset self-test and actual GUI-window creation.
-5. Inno Setup creates `Velomux-Setup-0.2.2-preview-Win-x64.exe`. CI silently installs it into a temporary folder, runs both tests against the **installed** copy, and uninstalls it.
+5. Inno Setup creates `Velomux-Setup-0.2.3-preview-Win-x64.exe`. CI silently installs it into a temporary folder, runs both tests against the **installed** copy, and uninstalls it.
 6. After all gates pass, **Actions > the successful run > Artifacts** contains a test-installer ZIP with the setup EXE, portable ZIP, `SHA256SUMS.txt`, `BUILD_PROVENANCE.txt`, and actual Qt-window screenshots (`qt-gui-source.png` and `qt-gui-frozen.png`) for graphical review.
 
 This test workflow has **read-only repository permissions**, and it cannot publish to GitHub Releases. Downloadable artifacts are retained for 14 days. An Actions artifact is **not** a publicly approved redistribution of the FFmpeg binary inside it.

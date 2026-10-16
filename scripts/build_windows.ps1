@@ -285,7 +285,7 @@ if ($Installer) {
     Write-Host 'Compiling Inno Setup 7 installer...' -ForegroundColor Cyan
     & $iscc (Join-Path $root 'installer\Velomux.iss')
     if ($LASTEXITCODE -ne 0) { Fail 'Inno Setup 7 compiler failed.' }
-    $setup = Join-Path $root 'dist\installer\Velomux-Setup-0.2.2-preview-Win-x64.exe'
+    $setup = Join-Path $root 'dist\installer\Velomux-Setup-0.2.3-preview-Win-x64.exe'
     if (-not (Test-Path -LiteralPath $setup -PathType Leaf)) { Fail 'Installer EXE was not created.' }
     Write-Host "TEST INSTALLER: $setup" -ForegroundColor Green
     Get-FileHash -LiteralPath $setup -Algorithm SHA256 | Format-List
