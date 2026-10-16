@@ -20,38 +20,37 @@ public partial class App : Application
         StartupDiagnostics.Record("OnFrameworkInitializationCompleted: creating main window.");
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new MainWindow();
+            var window = new MainWindow();
+            desktop.MainWindow = window;
             StartupDiagnostics.Record("MainWindow constructor completed.");
-            desktop.MainWindow.Opened += (_, _) =>
+            window.Opened += async (_, _) =>
             {
                 StartupDiagnostics.Record(
-                    "MainWindow.Opened; IsVisible=" + desktop.MainWindow.IsVisible
-                    + "; size=" + desktop.MainWindow.Bounds.Size);
-                if (Environment.GetCommandLineArgs().Contains("--desktop-startup-test"))
+                    "MainWindow.Opened; IsVisible=" + window.IsVisible
+                    + "; size=" + window.Bounds.Size);
+                if (!Environment.GetCommandLineArgs().Contains("--desktop-startup-test"))
+                    return;
+                bool healthy = window.IsVisible;
+                try
                 {
-                    Dispatcher.UIThread.Post(() =>
+                    // A visible window without the 51-preset engine is NOT a passing app.
+                    await window.EnsureCatalogLoadedAsync();
+                    await Dispatcher.UIThread.InvokeAsync(() =>
                     {
-                        bool healthy = desktop.MainWindow?.IsVisible == true;
-                        if (healthy && desktop.MainWindow is MainWindow window)
-                        {
-                            try
-                            {
-                                window.AssertInitialUiReady();
-                                window.SaveStartupUiSnapshot();
-                                StartupDiagnostics.Record(
-                                    "GUI_INITIAL_STATE: PASS (empty queue, selected M4A, settings layout, screenshot captured)");
-                            }
-                            catch (Exception ex)
-                            {
-                                healthy = false;
-                                StartupDiagnostics.Record("GUI_INITIAL_STATE: FAIL " + ex);
-                            }
-                        }
-                        StartupDiagnostics.Record(
-                            "DESKTOP_STARTUP_TEST: " + (healthy ? "PASS" : "FAIL"));
-                        desktop.Shutdown(healthy ? 0 : 51);
+                        window.AssertInitialUiReady();
+                        window.SaveStartupUiSnapshot();
                     }, DispatcherPriority.Background);
+                    StartupDiagnostics.Record(
+                        "GUI_INITIAL_STATE: PASS (seven workflows, 29 quick profiles, 51 presets, responsive layout)");
                 }
+                catch (Exception ex)
+                {
+                    healthy = false;
+                    StartupDiagnostics.Record("GUI_INITIAL_STATE: FAIL " + ex);
+                }
+                StartupDiagnostics.Record(
+                    "DESKTOP_STARTUP_TEST: " + (healthy ? "PASS" : "FAIL"));
+                desktop.Shutdown(healthy ? 0 : 51);
             };
         }
         base.OnFrameworkInitializationCompleted();
