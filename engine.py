@@ -465,45 +465,80 @@ def _image_save(source: Path, temp: Path, preset: Preset, opt: Options,
             im.save(temp, format=fmt, **kwargs)
         cb(95,'Validating image')
 
-def validate_output(output: Path, preset: Preset, expected: float,
-                    full_decode: bool = False, ffprobe: Optional[str] = None,
-                    ffmpeg: Optional[str] = None) -> bool:
-    """Verify readable output, matching media type/duration; full_decode optionally exhaustive.
+def validation_detail(output: Path, preset: Preset, expected: float,
+                      full_decode: bool = False, ffprobe: Optional[str] = None,
+                      ffmpeg: Optional[str] = None) -> tuple[bool, str]:
+    """Return a specific, actionable reason for output validation failures.
 
-    For stream-copy remux, duration can vary modestly due to packet timestamps.
-    Validation is deliberately conservative about declaring *complete*.
+    False success and generic 'size, stream or duration' errors are both
+    unacceptable. No previous output is replaced unless this gate passes.
     """
     try:
-        if not output.is_file() or output.stat().st_size <= 0: return False
+        if not output.is_file():
+            return False, 'No output file was created.'
+        size = output.stat().st_size
+        if size == 0:
+            return False, 'The generated output is 0 bytes.'
         if preset.group == 'image' or preset.vcodec == 'gif':
             with Image.open(output) as im:
                 total_ms = 0
-                for index in range(getattr(im,'n_frames',1)):
+                for index in range(getattr(im, 'n_frames', 1)):
                     im.seek(index)
                     im.load()
-                    total_ms += im.info.get('duration',0)
+                    total_ms += im.info.get('duration', 0)
                 if preset.vcodec == 'gif' and expected > 0 and total_ms:
-                    if abs(total_ms/1000-expected) > max(1.0,expected*0.05):
-                        return False
-            return True
+                    actual = total_ms / 1000.0
+                    if abs(actual - expected) > max(1.0, expected * 0.05):
+                        return False, (
+                            f'Animated image duration mismatch: expected {expected:.2f}s, '
+                            f'found {actual:.2f}s.'
+                        )
+            return True, 'Image decoded successfully.'
         info = probe(output, ffprobe=ffprobe)
         required = 'audio' if preset.group == 'audio' else 'video'
-        if not _stream(info, required): return False
-        duration = _duration(info)
+        stream = _stream(info, required)
+        if not stream:
+            available = ', '.join(sorted({
+                str(item.get('codec_type', 'unknown'))
+                for item in info.get('streams', [])
+            })) or 'none'
+            return False, f'Output is missing its {required} stream (found: {available}).'
+        actual = _duration(info)
         if expected > 0:
-            # -r and stream-copy cuts may differ by a frame or audio packet.
             tolerance = max(2.0, expected * 0.02)
-            if not (duration > 0 and abs(duration - expected) <= tolerance): return False
+            if actual <= 0:
+                return False, f'Cannot determine output {required} duration; expected about {expected:.2f}s.'
+            if abs(actual - expected) > tolerance:
+                return False, (
+                    f'{required.capitalize()} duration mismatch: expected {expected:.2f}s, '
+                    f'found {actual:.2f}s (tolerance {tolerance:.2f}s). '
+                    'The output was preserved only as a temporary file and not published.'
+                )
         if full_decode:
             exe = ffmpeg or which_tools()[0]
-            if not exe: return False
-            stream = '0:a:0' if required == 'audio' else '0:v:0'
-            cp = _run([exe,'-hide_banner','-v','error','-xerror','-i',str(output),'-map',stream,
-                       '-f','null','-'],timeout=3600)
-            if cp.returncode != 0: return False
-        return True
-    except Exception:
-        return False
+            if not exe:
+                return False, 'Full stream validation requires ffmpeg.exe, but it is unavailable.'
+            stream_id = '0:a:0' if required == 'audio' else '0:v:0'
+            cp = _run([exe, '-hide_banner', '-v', 'error', '-xerror',
+                       '-i', str(output), '-map', stream_id, '-f', 'null', '-'],
+                      timeout=3600)
+            if cp.returncode:
+                return False, (
+                    'Full decoding failed: ' +
+                    (cp.stderr.strip()[-400:] if cp.stderr.strip() else f'exit {cp.returncode}')
+                )
+        return True, f'Validated {required} stream and output duration.'
+    except Exception as exc:
+        return False, f'Validation could not inspect output: {type(exc).__name__}: {exc}'
+
+
+def validate_output(output: Path, preset: Preset, expected: float,
+                    full_decode: bool = False, ffprobe: Optional[str] = None,
+                    ffmpeg: Optional[str] = None) -> bool:
+    """Compatibility wrapper for callers expecting a boolean validation."""
+    return validation_detail(output, preset, expected,
+                             full_decode, ffprobe, ffmpeg)[0]
+
 
 def _hhmmss_to_seconds(time_str: str) -> float:
     try:
@@ -602,8 +637,9 @@ def convert(source: Path | str, target_dir: Path | str, preset: Preset | str,
             else:
                 _ffmpeg_convert(source,temp,preset,opt,info,expected,callback,cancel)
             if cancel.is_set(): raise CancelledError('Cancelled before output replacement.')
-            if not validate_output(temp,preset,expected,opt.decode_check):
-                raise ConversionError('Output failed validation (size, stream or duration). Existing file untouched.')
+            valid, reason = validation_detail(temp, preset, expected, opt.decode_check)
+            if not valid:
+                raise ConversionError(f'Output failed validation: {reason} Existing file untouched.')
             # os.replace is atomic on same volume, including Windows when target can be replaced.
             if os.path.normcase(os.path.abspath(str(temp))) == os.path.normcase(os.path.abspath(str(source))):
                 raise ConversionError('Refusing to replace source.')
