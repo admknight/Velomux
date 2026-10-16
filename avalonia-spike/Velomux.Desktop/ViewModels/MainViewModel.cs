@@ -73,7 +73,7 @@ public sealed class MainViewModel : INotifyPropertyChanged
     private PresetOption? _selectedPreset;
     private string _presetSearch = "", _presetFamily = "All";
     private string _collision = "rename", _trimStart = "0", _trimEnd = "0";
-    private string _quality = "23", _imageQuality = "90", _speed = "1";
+    private string _quality = "23", _imageQuality = "0", _speed = "1";
     private bool _normalize, _fullDecode;
     private string _mediaInfo = "Select a queued file and choose Inspect.";
     public ObservableCollection<MediaJob> Jobs { get; } = new();
