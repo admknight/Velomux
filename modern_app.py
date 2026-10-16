@@ -31,7 +31,8 @@ from engine import (
     compatibility, convert, describe, validate_options, which_tools,
 )
 from toolchain import tools_origin
-from velomux_flows import FLOWS, FLOWS_BY_ID, PROFILE_BY_ID, recommended_preset, destination_for
+from velomux_flows import (FLOWS, FLOWS_BY_ID, PROFILE_BY_ID, recommended_preset,
+                           destination_for, media_paths_from_arguments)
 from version import APP_NAME, APP_VERSION, GITHUB_REPOSITORY
 
 BG = '#090E19'
@@ -1507,6 +1508,11 @@ def main():
     app.setFont(QFont('Segoe UI',10))
     ui=MainWindow()
     ui.show()
+    # Windows Explorer's optional right-click entry passes a quoted filename.
+    # Never start encoding on launch; just queue supported local files.
+    incoming = media_paths_from_arguments(sys.argv[1:])
+    if incoming:
+        ui.import_paths(incoming)
     return app.exec()
 
 
