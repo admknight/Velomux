@@ -1,4 +1,6 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media.Imaging;
 using Avalonia.Interactivity;
 using Avalonia.Input;
 using Avalonia.Platform.Storage;
@@ -45,6 +47,22 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = new MainViewModel();
+    }
+
+    internal void SaveStartupUiSnapshot()
+    {
+        var dir = Path.Combine(AppContext.BaseDirectory, "ui-qa");
+        Directory.CreateDirectory(dir);
+        int width = Math.Max(1, (int)Math.Ceiling(Bounds.Width));
+        int height = Math.Max(1, (int)Math.Ceiling(Bounds.Height));
+        string filename = Path.Combine(dir, "Avalonia-Windows-Startup.png");
+        using var snapshot = new RenderTargetBitmap(new PixelSize(width, height));
+        snapshot.Render(this);
+        snapshot.Save(filename);
+        if (!File.Exists(filename) || new FileInfo(filename).Length < 5000)
+            throw new IOException("The opened Avalonia window was not captured into a valid PNG.");
+        Services.StartupDiagnostics.Record(
+            $"GUI_SCREENSHOT: {filename} ({width}x{height}).");
     }
 
     private async void AddFiles_Click(object? sender, RoutedEventArgs e)
