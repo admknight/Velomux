@@ -1,0 +1,66 @@
+name: Import Velomux source (one-time)
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.bootstrap/velomux-source.tar.xz'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  import-source:
+    if: github.repository == 'admknight/Velomux'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify, unpack and inspect source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, io, tarfile
+          p=Path('.bootstrap/velomux-source.tar.xz')
+          expected='a4f5c4640deb5d4cbfbbfac0d517b60160d4659dcccc8803e28af8dd001b4276'
+          digest=hashlib.sha256(p.read_bytes()).hexdigest()
+          if digest!=expected: raise SystemExit('Source archive SHA256 mismatch: '+digest)
+          with tarfile.open(p, 'r:xz') as z:
+              for m in z.getmembers():
+                  path=Path(m.name)
+                  if m.issym() or m.islnk() or m.isdev() or path.is_absolute() or '..' in path.parts: raise SystemExit('Unsafe archive member '+m.name)
+              z.extractall('.',filter='data')
+          for path in ('engine.py','modern_app.py','run.py','scripts/build_windows.ps1','.github/workflows/build-windows-installer.yml'):
+              if not Path(path).is_file(): raise SystemExit('Missing required source: '+path)
+          print('Archive validated, source extracted')
+          PY
+      - name: Generate application icons
+        run: |
+          python -m pip install --disable-pip-version-check "Pillow>=10.2,<13"
+          python assets/generate_icons.py
+          test -s assets/velomux.ico
+          test -s assets/velomux.png
+      - name: Verify Python source and execute unit tests
+        run: |
+          python -m pip install --disable-pip-version-check pytest
+          python -m compileall -q .
+          python -m pytest -q tests
+      - name: Commit imported source, preserve bootstrap provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .bootstrap/velomux-source.tar.xz
+          rmdir .bootstrap || true
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to import"
+          else
+            git commit -m "feat: import Velomux Qt converter source and Windows release pipelines"
+            git push origin HEAD:main
+          fi
