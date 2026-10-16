@@ -312,7 +312,7 @@ def _codec_args(preset: Preset, source_info: dict, opt: Options) -> list[str]:
                 or opt.audio_normalize or opt.audio_sample_rate
                 or opt.audio_channels or abs(opt.audio_gain_db) > 0.001):
             raise ConversionError(
-                'Stream-copy rewrap cannot apply filters, speed or audio processing. '
+                'Stream-copy rewrap is incompatible with filters, speed or audio processing. '
                 'Choose an encoding workflow for those operations.'
             )
         cmd += ['-map','0:v?', '-map','0:s?']
