@@ -37,8 +37,9 @@ public partial class App : Application
                             try
                             {
                                 window.AssertInitialUiReady();
+                                window.SaveStartupUiSnapshot();
                                 StartupDiagnostics.Record(
-                                    "GUI_INITIAL_STATE: PASS (empty queue, selected M4A, settings layout)");
+                                    "GUI_INITIAL_STATE: PASS (empty queue, selected M4A, settings layout, screenshot captured)");
                             }
                             catch (Exception ex)
                             {
