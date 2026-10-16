@@ -21,6 +21,9 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = new MainViewModel();
         SizeChanged += (_, _) => UpdateResponsiveShell();
+        // Prevent wheel-hover on closed format/profile dropdowns from changing
+        // the selected encoding operation. Scroll the settings viewport instead.
+        AddHandler(InputElement.PointerWheelChangedEvent, ProtectWheelSelection, RoutingStrategies.Tunnel);
         Opened += (_, _) =>
         {
             UpdateResponsiveShell();
@@ -115,6 +118,24 @@ public partial class MainWindow : Window
         if (!File.Exists(path) || new FileInfo(path).Length < 5000)
             throw new IOException("The full-workstation screenshot was not captured.");
         StartupDiagnostics.Record($"GUI_SCREENSHOT: {path} ({size.Width}x{size.Height}).");
+    }
+
+    private void ProtectWheelSelection(object? sender, PointerWheelEventArgs e)
+    {
+        for (Control? current = e.Source as Control; current != null;
+             current = current.Parent as Control)
+        {
+            if (current is not ComboBox combo) continue;
+            if (combo.IsDropDownOpen) return;
+            e.Handled = true;
+            if (this.FindControl<ScrollViewer>("SettingsViewport") is { } viewer)
+            {
+                double max = Math.Max(0, viewer.Extent.Height - viewer.Viewport.Height);
+                viewer.Offset = new Vector(viewer.Offset.X,
+                    Math.Clamp(viewer.Offset.Y - e.Delta.Y * 45, 0, max));
+            }
+            return;
+        }
     }
 
     private void ChooseTask_Click(object? sender, RoutedEventArgs e)
