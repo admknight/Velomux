@@ -115,7 +115,6 @@ public static class MediaEngineBridge
             }
             catch (IOException) { }
             catch (InvalidOperationException) { }
-            catch (ObjectDisposedException) { }
         });
         await process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(
             new { source, destination, preset, options }));
