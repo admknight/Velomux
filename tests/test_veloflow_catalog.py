@@ -4,7 +4,7 @@ from pathlib import Path
 from engine import PRESET_MAP
 from velomux_flows import (
     FLOWS, FLOWS_BY_ID, PROFILE_BY_ID, AUTOMATIC_BY_KIND,
-    destination_for, recommended_preset,
+    destination_for, recommended_preset, media_paths_from_arguments,
 )
 
 
@@ -76,3 +76,13 @@ def test_curated_profiles_have_meaningful_distinct_options():
     task = FLOWS_BY_ID['video']
     assert any(PRESET_MAP[p.preset].video_quality_hint == 18 for p in task.profiles)
     assert any(PRESET_MAP[p.preset].video_speed_hint for p in task.profiles)
+
+
+def test_windows_explorer_argument_queuing_no_implicit_processing(tmp_path):
+    media = tmp_path / "Old songs (90s) - Jhankar & friends.mp4"
+    media.write_bytes(b"not actually converted by argument parsing")
+    other = tmp_path / "not-supported.exe"
+    other.write_bytes(b"something")
+    assert media_paths_from_arguments([str(media), str(media), str(other),
+                                      str(tmp_path / "missing.mp4"),
+                                      "--self-test"]) == [media.resolve()]
