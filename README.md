@@ -2,6 +2,34 @@
 
 **Convert your media, your way.**
 
+**Maintained by [Adam Knight](https://github.com/admknight) (@admknight).**
+This independent, offline-first converter is under active development.
+
+### VeloFlow — choose the task before the codec
+
+Quick Mode offers seven visible actions: **Video, Audio, Images,
+Extract Audio, Compress, Rewrap, and Trim**. The 29 purpose-based profiles map
+to actual engine presets; imported files are checked for task compatibility
+rather than silently converting every MP4 to M4A.
+
+Advanced Mode retains the 51 codec-oriented presets and detailed controls.
+Optional Explorer integration (`Open in Velomux`) can be selected during
+Windows installation. It queues a chosen file without automatically changing
+it. Custom output directories can retain folder hierarchy when importing a
+directory.
+
+Stream-copy Rewrap preserves compatible video, audio and subtitle streams
+without recompression; containers which reject a stream fail instead of
+silently discarding it. Fast Trim aligns cuts with keyframes, whereas
+re-encoding is needed for more precise cuts.
+
+**IMPORTANT:** Work remains on real-world MP4-to-M4A validation failures,
+the waveform timeline, stream-editor interface, device-focused presets,
+public licensing, update safety and digital signing. VeloFlow is a preview,
+not claimed equivalent to established video production applications.
+See [implemented features and release blockers](docs/VELOFLOW_PRODUCT_SCOPE.md).
+
+
 Velomux is a standalone, offline-first Windows media converter under active development. It processes video, audio and images through FFmpeg/ffprobe and Pillow, with a modern Qt 6 interface, drag-and-drop batch queue, presets, advanced controls and safe output replacement.
 
 **Status:** `0.2.3-preview`, a private test/build candidate; not a publicly released product. The design preview in `previews/` is illustrative, not a screenshot of the running application. The Windows installer is not precompiled in this source package.
