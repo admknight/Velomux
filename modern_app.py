@@ -33,7 +33,8 @@ from engine import (
 from toolchain import tools_origin
 from velomux_flows import (FLOWS, FLOWS_BY_ID, PROFILE_BY_ID, recommended_preset,
                            destination_for, media_paths_from_arguments)
-from version import APP_NAME, APP_VERSION, GITHUB_REPOSITORY
+from version import (APP_NAME, APP_VERSION, GITHUB_REPOSITORY,
+                     PROJECT_CREATOR_NAME, PROJECT_CREATOR_HANDLE, PROJECT_CREATOR_ROLE)
 
 BG = '#090E19'
 SURFACE = '#11192A'
@@ -973,8 +974,8 @@ class MainWindow(QMainWindow):
         layout.addWidget(card(overview, 'Panel', 18))
 
         people = vbox(9)
-        people.addWidget(label('PROJECT MAINTENANCE', 'Caption'))
-        people.addWidget(label('Maintained by Adam Knight (@admknight)', 'Section'))
+        people.addWidget(label(PROJECT_CREATOR_ROLE.upper(), 'Caption'))
+        people.addWidget(label(f'{PROJECT_CREATOR_NAME} ({PROJECT_CREATOR_HANDLE})', 'Section'))
         people.addWidget(label(
             'Source, issue tracking and development builds are managed through '
             'the official Velomux GitHub repository.'
