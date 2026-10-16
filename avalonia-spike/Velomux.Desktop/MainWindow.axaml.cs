@@ -36,6 +36,24 @@ public partial class MainWindow : Window
             throw new InvalidOperationException("M4A/MP3 selected-format visual state is incorrect.");
         if (settings.Bounds.Width <= 0 || settings.Bounds.Height <= 0)
             throw new InvalidOperationException("Settings panel has no rendered layout dimensions.");
+
+        // The previous layout passed compilation but its queue header forced
+        // the entire right-hand settings panel off-screen at 1040px.
+        // Check real, translated render bounds, not only XAML validity.
+        foreach (var name in new[] { "QueuePanel", "SettingsPanel", "CreatorCredits" })
+        {
+            var panel = this.FindControl<Control>(name)
+                        ?? throw new InvalidOperationException($"Missing layout element {name}.");
+            var bottomRight = panel.TranslatePoint(
+                new Point(panel.Bounds.Width, panel.Bounds.Height), this);
+            if (bottomRight is null)
+                throw new InvalidOperationException($"Cannot locate {name} on the window.");
+            if (bottomRight.Value.X > Bounds.Width + 1 ||
+                bottomRight.Value.Y > Bounds.Height + 1)
+                throw new InvalidOperationException(
+                    $"Layout overflow: {name} ends at {bottomRight.Value} " +
+                    $"outside the visible {Bounds.Width}x{Bounds.Height} window.");
+        }
         // Cancelling a file dialog must not change the initial ready status.
         string originalStatus = Vm.Status;
         Vm.AddFiles(Array.Empty<string>());
