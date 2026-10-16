@@ -38,10 +38,14 @@ jobs:
           if ($ff.Count -ne 1) { throw "Expected one bundled ffmpeg.exe, found $($ff.Count)" }
           $peer = Join-Path $ff[0].DirectoryName 'ffprobe.exe'
           if (-not (Test-Path -LiteralPath $peer -PathType Leaf)) { throw 'ffprobe.exe missing in pinned FFmpeg distribution.' }
-          & $ff[0].FullName -version | Select-Object -First 1
-          if ($LASTEXITCODE -ne 0) { throw 'Pinned ffmpeg.exe validation failed.' }
-          & $peer -version | Select-Object -First 1
-          if ($LASTEXITCODE -ne 0) { throw 'Pinned ffprobe.exe validation failed.' }
+          $ffmpegVersion = & $ff[0].FullName -version 2>&1
+          $ffmpegExit = $LASTEXITCODE
+          $ffprobeVersion = & $peer -version 2>&1
+          $ffprobeExit = $LASTEXITCODE
+          if ($ffmpegExit -ne 0) { throw "Pinned ffmpeg.exe validation failed: $ffmpegExit" }
+          if ($ffprobeExit -ne 0) { throw "Pinned ffprobe.exe validation failed: $ffprobeExit" }
+          Write-Host $ffmpegVersion[0]
+          Write-Host $ffprobeVersion[0]
           "FFMPEG_BIN_DIR=$($ff[0].DirectoryName)" >> $env:GITHUB_ENV
           $ff[0].DirectoryName >> $env:GITHUB_PATH
           Write-Host 'SHA-256 verified, fixed-release FFmpeg/ffprobe binaries staged (private test build).'
