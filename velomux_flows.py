@@ -133,3 +133,24 @@ def destination_for(source: Path, custom_base: Path,
     if not safe_parts or any(part in ('..', '') for part in safe_parts):
         return custom_base
     return custom_base.joinpath(*safe_parts)
+
+
+def media_paths_from_arguments(arguments: list[str]) -> list[Path]:
+    """Safe Explorer entry point: accept actual local media files, no shell calls.
+
+    Unsupported or nonexistent paths are ignored; a GUI launch never converts
+    automatically. One Explorer selection may launch one application instance.
+    """
+    from engine import SUPPORTED_SUFFIXES
+    found: list[Path] = []
+    seen: set[str] = set()
+    for item in arguments:
+        path = Path(item).expanduser()
+        if (not path.is_file() or path.suffix.lower() not in SUPPORTED_SUFFIXES):
+            continue
+        canonical = path.resolve()
+        key = str(canonical).casefold()
+        if key not in seen:
+            seen.add(key)
+            found.append(canonical)
+    return found
