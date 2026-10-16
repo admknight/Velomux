@@ -30,7 +30,8 @@ internal static class Program
             + "; smoke=" + desktopSmoke);
         try
         {
-            BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+            BuildAvaloniaApp(forceSoftwareRendering: args.Contains("--software-rendering"))
+                .StartWithClassicDesktopLifetime(args);
             Services.StartupDiagnostics.Record(
                 "END: Avalonia desktop session; exit=" + Environment.ExitCode);
             return Environment.ExitCode;
@@ -42,8 +43,22 @@ internal static class Program
         }
     }
 
-    public static AppBuilder BuildAvaloniaApp() =>
-        AppBuilder.Configure<App>()
+    public static AppBuilder BuildAvaloniaApp(bool forceSoftwareRendering = false)
+    {
+        var builder = AppBuilder.Configure<App>()
             .UsePlatformDetect()
             .LogToTrace();
+
+        // Keep the default ANGLE->software fallback, with an explicit
+        // troubleshooting path for Windows graphics-driver problems.
+        if (forceSoftwareRendering && OperatingSystem.IsWindows())
+        {
+            Services.StartupDiagnostics.Record("GPU diagnostic mode: software renderer requested.");
+            builder = builder.With(new Win32PlatformOptions
+            {
+                RenderingMode = new[] { Win32RenderingMode.Software }
+            });
+        }
+        return builder;
+    }
 }
