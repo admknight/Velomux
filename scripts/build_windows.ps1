@@ -152,9 +152,16 @@ if (-not ((Test-Path -LiteralPath $ffmpeg -PathType Leaf) -and (Test-Path -Liter
     Write-Warning 'Private TEST build: actual FFmpeg binaries copied from the build machine; NOT cleared for public redistribution.'
 }
 foreach ($tool in @($ffmpeg,$ffprobe)) {
-    $versionLines = @(& $tool '-version')
-    if ($LASTEXITCODE -ne 0) { Fail "Cannot execute bundled tool: $tool" }
-    Write-Host ($versionLines | Select-Object -First 1)
+    $toolInfo = Get-Item -LiteralPath $tool
+    Write-Host "Validating bundled executable: $tool ($($toolInfo.Length) bytes)"
+    $toolOutput = & $tool '-version' 2>&1 | Out-String
+    $toolExit = $LASTEXITCODE
+    if ($toolExit -ne 0) {
+        Write-Warning "Bundled executable exit code: $toolExit"
+        Write-Warning "Executable output: $toolOutput"
+        Fail "Cannot execute bundled tool: $tool (exit $toolExit)"
+    }
+    Write-Host ($toolOutput.Trim() -split "\\r?\\n" | Select-Object -First 1)
 }
 
 if ($ForDistribution) {
