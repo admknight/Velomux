@@ -72,7 +72,7 @@ jobs:
         shell: pwsh
         run: |
           $paths = @(
-            'dist\installer\Velomux-Setup-0.2.2-preview-Win-x64.exe',
+            'dist\installer\Velomux-Setup-0.2.3-preview-Win-x64.exe',
             'dist\Velomux-Windows-Portable-x64.zip'
           )
           $checksums = foreach ($path in $paths) {
@@ -95,9 +95,9 @@ jobs:
       - name: Upload verified Windows TEST artifacts (not public Releases)
         uses: actions/upload-artifact@v4
         with:
-          name: Velomux-0.2.2-preview-Windows-x64-TEST
+          name: Velomux-0.2.3-preview-Windows-x64-TEST
           path: |
-            dist/installer/Velomux-Setup-0.2.2-preview-Win-x64.exe
+            dist/installer/Velomux-Setup-0.2.3-preview-Win-x64.exe
             dist/Velomux-Windows-Portable-x64.zip
             dist/SHA256SUMS.txt
             dist/BUILD_PROVENANCE.txt
@@ -109,7 +109,7 @@ jobs:
       - name: Upload GUI screenshots separately for visual review
         uses: actions/upload-artifact@v4
         with:
-          name: Velomux-0.2.2-preview-GUI-Review
+          name: Velomux-0.2.3-preview-GUI-Review
           path: |
             dist/qt-gui-source.png
             dist/qt-gui-frozen.png

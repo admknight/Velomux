@@ -4,11 +4,11 @@
 
 Velomux is a standalone, offline-first Windows media converter under active development. It processes video, audio and images through FFmpeg/ffprobe and Pillow, with a modern Qt 6 interface, drag-and-drop batch queue, presets, advanced controls and safe output replacement.
 
-**Status:** `0.2.2-preview`, a private test/build candidate; not a publicly released product. The design preview in `previews/` is illustrative, not a screenshot of the running application. The Windows installer is not precompiled in this source package.
+**Status:** `0.2.3-preview`, a private test/build candidate; not a publicly released product. The design preview in `previews/` is illustrative, not a screenshot of the running application. The Windows installer is not precompiled in this source package.
 
 ## If you just want to test a Windows `.exe` installer
 
-The goal is `Velomux-Setup-0.2.2-preview-Win-x64.exe`. A built installer contains the standalone `Velomux.exe` app and bundled `ffmpeg.exe`/`ffprobe.exe`, so installing and using it does **not** require Python, Inno Setup or a separate FFmpeg installation.
+The goal is `Velomux-Setup-0.2.3-preview-Win-x64.exe`. A built installer contains the standalone `Velomux.exe` app and bundled `ffmpeg.exe`/`ffprobe.exe`, so installing and using it does **not** require Python, Inno Setup or a separate FFmpeg installation.
 
 There are two ways to generate the installer:
 
