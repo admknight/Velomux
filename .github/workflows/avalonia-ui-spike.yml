@@ -29,8 +29,45 @@ jobs:
         run: dotnet restore avalonia-spike/Velomux.Desktop/Velomux.Desktop.csproj
       - name: Build Avalonia UI on Windows
         run: dotnet build avalonia-spike/Velomux.Desktop/Velomux.Desktop.csproj -c Release --no-restore -warnaserror
-      - name: Publish standalone Windows evaluation executable
-        run: dotnet publish avalonia-spike/Velomux.Desktop/Velomux.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false -o avalonia-spike/publish
+      - name: Publish standalone Windows evaluation executable with native dependencies bundled
+        run: dotnet publish avalonia-spike/Velomux.Desktop/Velomux.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishTrimmed=false -o avalonia-spike/publish
+      - name: Verify actual single-file packaging
+        shell: pwsh
+        run: |
+          $dir = Join-Path $PWD 'avalonia-spike/publish'
+          $exe = Join-Path $dir 'Velomux.Avalonia.Spike.exe'
+          if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'Published GUI executable missing.' }
+          $loose = @(Get-ChildItem -LiteralPath $dir -File -Filter '*.dll')
+          if ($loose.Count -gt 0) {
+            throw "Publish still contains $($loose.Count) external DLLs; single-EXE claim is invalid."
+          }
+          Write-Host "Self-contained Windows EXE size: $((Get-Item -LiteralPath $exe).Length) bytes"
+      - name: Launch PUBLISHED Windows GUI and verify main window opens
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path $PWD 'avalonia-spike/publish/Velomux.Avalonia.Spike.exe'
+          $log = Join-Path $env:LOCALAPPDATA 'Velomux/Logs/avalonia-startup.log'
+          if (Test-Path -LiteralPath $log) { Remove-Item -LiteralPath $log -Force }
+          $process = Start-Process -FilePath $exe -ArgumentList '--desktop-startup-test' -PassThru
+          if (-not $process.WaitForExit(35000)) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            throw 'Published Avalonia application did not open its window and exit in 35 seconds.'
+          }
+          $process.Refresh()
+          if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log }
+          if ($process.ExitCode -ne 0) {
+            throw "Published Avalonia window startup failed (exit $($process.ExitCode))."
+          }
+          if (-not (Test-Path -LiteralPath $log)) { throw 'No GUI startup event log was produced.' }
+          $events = Get-Content -LiteralPath $log -Raw
+          if ($events -notmatch 'DESKTOP_STARTUP_TEST: PASS') {
+            throw 'The executable exited without proving MainWindow.Opened and IsVisible=true.'
+          }
+          Write-Host 'PASS: actual Windows published executable created a visible Avalonia main window.'
+      - name: Include optional Windows diagnostic launcher
+        shell: pwsh
+        run: Copy-Item -LiteralPath 'avalonia-spike/Run-Velomux-Diagnostics.cmd' -Destination 'avalonia-spike/publish/Run-Velomux-Diagnostics.cmd'
       - uses: actions/upload-artifact@v4
         with:
           name: Velomux-Avalonia-UI-SPIKE-NOT-FOR-RELEASE
