@@ -128,7 +128,7 @@
           <Button Content="Rewrap" Tag="rewrap" Classes="workflow" Margin="0,0,6,5" Click="ChooseTask_Click"/>
           <Button Content="Trim" Tag="trim" Classes="workflow" Margin="0,0,6,5" Click="ChooseTask_Click"/>
         </WrapPanel>
-        <Grid Grid.Row="1" ColumnDefinitions="*,410" ColumnSpacing="14">
+        <Grid x:Name="WorkspaceColumns" Grid.Row="1" ColumnDefinitions="*,410" ColumnSpacing="14">
           <Border x:Name="QueuePanel" Grid.Column="0" Classes="card" Padding="16">
             <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" RowSpacing="12">
               <StackPanel Grid.Row="0" Spacing="8">
@@ -216,13 +216,15 @@
                              FontSize="10" Foreground="#91A8C6"
                              VerticalAlignment="Center"/>
                 </WrapPanel>
+                <TextBlock Text="{Binding Status}" FontSize="11" Foreground="#B9CBE7"
+                           TextWrapping="Wrap" MaxLines="2"/>
                 <Border Background="#14263C" CornerRadius="9" Padding="10,8">
                   <TextBlock Text="{Binding MediaInfo}" MaxLines="4"
                              TextWrapping="Wrap" FontSize="11" Foreground="#BED0E8"/>
                 </Border>
               </StackPanel>
 
-              <StackPanel Grid.Row="4" Spacing="6">
+              <StackPanel x:Name="ActivityPanel" Grid.Row="4" Spacing="6">
                 <TextBlock Text="ACTIVITY" Classes="label"/>
                 <ListBox Height="90" ItemsSource="{Binding Activity}"
                          Background="#0C1829" BorderThickness="0"
