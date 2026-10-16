@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - '.bootstrap/velomux-source.tar.xz'
+      - '.github/workflows/import-source.yml'
   workflow_dispatch:
 permissions:
   contents: write
