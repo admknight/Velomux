@@ -204,6 +204,7 @@ def hbox(spacing: int = 10) -> QHBoxLayout:
 class QueueEntry:
     source: Path
     preset: str
+    import_root: Path | None = None
     state: str = 'Waiting'
     percent: float = 0.0
     output: str = ''
@@ -812,10 +813,13 @@ class MainWindow(QMainWindow):
         self._group_input(l, 'EXISTING FILE HANDLING', self.collision)
         self.recursive = QCheckBox('Include subfolders when importing folders')
         self.recursive.setChecked(True)
+        self.preserve_tree = QCheckBox('Preserve imported folder structure in custom output')
+        self.preserve_tree.setChecked(True)
         self.keep_metadata = QCheckBox('Preserve metadata where supported')
         self.keep_metadata.setChecked(True)
         self.full_verify = QCheckBox('Full output stream validation (slower)')
         l.addWidget(self.recursive)
+        l.addWidget(self.preserve_tree)
         l.addWidget(self.keep_metadata)
         l.addWidget(self.full_verify)
         l.addWidget(label('Safeguard: new files are staged, validated, then moved into place. Originals are never overwritten.'))
@@ -952,6 +956,8 @@ class MainWindow(QMainWindow):
 
     def _toggle_mode(self):
         advanced = self.mode.currentIndex() == 1
+        self.advanced_formats.setVisible(advanced)
+        self.quick_panel.setVisible(not advanced)
         for index in range(1, self.tabs.count()):
             self.tabs.setTabVisible(index, advanced)
 
@@ -964,10 +970,18 @@ class MainWindow(QMainWindow):
         self.output.setText(str(self.settings.value('output_directory',str(Path.home()/'Downloads'/'Converted'))))
         self.beside_source.setChecked(str(self.settings.value('beside_source','true')).lower() == 'true')
         self.recursive.setChecked(str(self.settings.value('recursive','true')).lower() == 'true')
+        self.preserve_tree.setChecked(str(self.settings.value('preserve_tree','true')).lower() == 'true')
         self.keep_metadata.setChecked(str(self.settings.value('metadata','true')).lower() == 'true')
         index=self.collision.findData(str(self.settings.value('collision','repair')))
         if index >= 0: self.collision.setCurrentIndex(index)
         self.mode.setCurrentIndex(int(self.settings.value('mode',0)))
+        flow_id = str(self.settings.value('flow_task', '') or '')
+        if flow_id in FLOWS_BY_ID:
+            self._select_quick_task(flow_id)
+            profile_id = str(self.settings.value('flow_profile', '') or '')
+            index = self.quick_profiles.findData(profile_id)
+            if index >= 0:
+                self.quick_profiles.setCurrentIndex(index)
         geometry=self.settings.value('geometry')
         if geometry is not None: self.restoreGeometry(geometry)
 
@@ -975,6 +989,9 @@ class MainWindow(QMainWindow):
         self.settings.setValue('output_directory',self.output.text())
         self.settings.setValue('beside_source',self.beside_source.isChecked())
         self.settings.setValue('recursive',self.recursive.isChecked())
+        self.settings.setValue('preserve_tree',self.preserve_tree.isChecked())
+        self.settings.setValue('flow_task',self._quick_task_id or '')
+        self.settings.setValue('flow_profile',self.quick_profiles.currentData() or '')
         self.settings.setValue('metadata',self.keep_metadata.isChecked())
         self.settings.setValue('collision',self.collision.currentData())
         self.settings.setValue('geometry',self.saveGeometry())
@@ -1134,6 +1151,10 @@ class MainWindow(QMainWindow):
             if not compatibility(entry.source,preset):
                 self._add_log(f'[IGNORED] {entry.source.name}: not compatible with {preset.group} preset.')
                 continue
+            if self.mode.currentIndex() == 0 and self._quick_task_id:
+                if classify(entry.source) not in FLOWS_BY_ID[self._quick_task_id].input_kinds:
+                    self._add_log(f'[IGNORED] {entry.source.name}: incompatible with selected VeloFlow.')
+                    continue
             entry.preset=name
             entry.state='Waiting'
             entry.percent=0.0
@@ -1171,7 +1192,8 @@ class MainWindow(QMainWindow):
     def _set_processing(self, processing: bool):
         for widget in (self.add_button,self.folder_button,self.remove_button,self.clear_button,
                        self.apply_button,self.preset,self.family,self.tabs,self.collision,
-                       self.beside_source,self.output,self.recursive):
+                       self.beside_source,self.output,self.recursive,self.preserve_tree,
+                       self.quick_panel,self.mode):
             widget.setEnabled(not processing)
         self.start_button.setEnabled(not processing)
         self.cancel_button.setEnabled(processing)
@@ -1181,6 +1203,11 @@ class MainWindow(QMainWindow):
         if not self.entries:
             QMessageBox.information(self,'Empty queue','Add files or a folder to convert first.')
             return
+        if self.mode.currentIndex() == 0 and self._quick_task_id == 'trim':
+            if self.trim_start.value() == 0 and self.trim_end.value() == 0:
+                QMessageBox.warning(self, 'Trim range required',
+                                    'Set a start or end time for the Trim workflow.')
+                return
         try:
             opt=self._options()
             custom=self.output.text().strip()
