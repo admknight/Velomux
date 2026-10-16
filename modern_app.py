@@ -16,10 +16,10 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 import json
 
-from PySide6.QtCore import Qt, QSettings, QThread, Signal, QUrl, QSize
-from PySide6.QtGui import QColor, QDesktopServices, QFont, QKeySequence, QShortcut, QIcon, QPainter, QBrush, QPixmap, QPen
+from PySide6.QtCore import Qt, QSettings, QThread, Signal, QUrl, QSize, QPointF
+from PySide6.QtGui import QColor, QDesktopServices, QFont, QKeySequence, QShortcut, QIcon, QPainter, QBrush, QPixmap, QPen, QWheelEvent
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFrame,
+    QAbstractScrollArea, QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFrame,
     QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
     QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSpinBox, QSplitter,
     QStackedWidget, QStyle, QTabWidget, QTableWidget, QTableWidgetItem,
@@ -103,29 +103,62 @@ QSplitter::handle { background: transparent; width: 10px; }
 '''
 
 
+def _scroll_settings_wheel(widget: QWidget, event: QWheelEvent) -> None:
+    """Send wheel input to a scroll area, never to a settings value editor.
+
+    A generic event.ignore() protects the setting but is insufficient for some
+    Qt delivery paths: hovering a focused spin box can stop page scrolling.
+    Forward the original wheel delta to the scroll-area viewport. A nested tab
+    scrolls first; if it is already at the requested limit, its outer settings
+    pane can scroll instead. Preserve high-resolution trackpad wheel deltas.
+    """
+    delta = event.angleDelta().y() or event.pixelDelta().y()
+    parent = widget.parentWidget()
+    while parent is not None:
+        if isinstance(parent, QAbstractScrollArea):
+            bar = parent.verticalScrollBar()
+            if bar.maximum() > bar.minimum():
+                at_limit = (
+                    (delta > 0 and bar.value() <= bar.minimum()) or
+                    (delta < 0 and bar.value() >= bar.maximum())
+                )
+                if not at_limit:
+                    viewport = parent.viewport()
+                    local = viewport.mapFromGlobal(event.globalPosition().toPoint())
+                    forwarded = QWheelEvent(
+                        QPointF(local), event.globalPosition(),
+                        event.pixelDelta(), event.angleDelta(),
+                        event.buttons(), event.modifiers(),
+                        event.phase(), event.inverted()
+                    )
+                    previous = bar.value()
+                    QApplication.sendEvent(viewport, forwarded)
+                    if forwarded.isAccepted() or bar.value() != previous:
+                        event.accept()
+                        return
+        parent = parent.parentWidget()
+    event.ignore()
+
+
 class WheelSafeSpinBox(QSpinBox):
-    """A wheel over a settings field scrolls the page, never changes its value."""
+    """Keep numeric settings fixed when using the wheel to scroll."""
 
     def wheelEvent(self, event):
-        event.ignore()
+        _scroll_settings_wheel(self, event)
 
 
 class WheelSafeDoubleSpinBox(QDoubleSpinBox):
-    """Keep precision settings stable while the user scrolls the settings pane."""
+    """Keep precision settings fixed when using the wheel to scroll."""
 
     def wheelEvent(self, event):
-        event.ignore()
+        _scroll_settings_wheel(self, event)
 
 
 class WheelSafeComboBox(QComboBox):
-    """Prevent unintentional selection changes when scrolling across dropdowns.
-
-    The opened popup has its own item-view scrolling, and keyboard selection
-    continues to work normally.
-    """
+    """Prevent wheel-driven selection changes, but retain popup navigation."""
 
     def wheelEvent(self, event):
-        event.ignore()
+        _scroll_settings_wheel(self, event)
 
 
 def label(text: str, object_name: str = 'Caption') -> QLabel:
