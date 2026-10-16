@@ -58,7 +58,7 @@ public partial class MainWindow : Window
         string filename = Path.Combine(dir, "Avalonia-Windows-Startup.png");
         using var snapshot = new RenderTargetBitmap(new PixelSize(width, height));
         snapshot.Render(this);
-        snapshot.Save(filename);
+        snapshot.Save(filename, PngBitmapEncoderOptions.Default);
         if (!File.Exists(filename) || new FileInfo(filename).Length < 5000)
             throw new IOException("The opened Avalonia window was not captured into a valid PNG.");
         Services.StartupDiagnostics.Record(
