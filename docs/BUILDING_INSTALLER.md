@@ -2,7 +2,7 @@
 
 ## What is installed on the testing user's PC?
 
-A single `Velomux-Setup-0.2.3-preview-Win-x64.exe` installer, containing:
+A single `Velomux-Setup-0.3.0-preview-Win-x64.exe` installer, containing:
 
 - `Velomux.exe` and its frozen Python/Qt/Pillow runtime (not a Python source launcher).
 - `ffmpeg.exe` and `ffprobe.exe` bundled inside the app directory.
@@ -17,7 +17,7 @@ A single `Velomux-Setup-0.2.3-preview-Win-x64.exe` installer, containing:
 3. Confirm **FFmpeg and ffprobe** resolve in PowerShell: `ffmpeg -version` and `ffprobe -version`.
 4. Confirm build-only Python 3.11+ is available via `py -3 --version` or `python --version`.
 5. Double-click `BUILD_INSTALLER.cmd`. It runs tests, freezes the app with PyInstaller, verifies that bundled binaries exist and pass a self-test, then calls Inno Setup 7.
-6. The resulting installer (if successful) appears in `dist\installer\Velomux-Setup-0.2.3-preview-Win-x64.exe`.
+6. The resulting installer (if successful) appears in `dist\installer\Velomux-Setup-0.3.0-preview-Win-x64.exe`.
 
 If Inno Setup was installed in a custom folder, set `VELOMUX_ISCC_PATH` to its `ISCC.exe` file before starting `BUILD_INSTALLER.cmd`, or pass `-InnoSetupCompilerPath "C:\path\to\ISCC.exe"` to `scripts\build_windows.ps1` directly. Neither is necessary for typical per-user installations.
 

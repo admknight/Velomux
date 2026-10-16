@@ -2,7 +2,7 @@
 # No system-wide configuration is changed; Inno Setup installer is per-user.
 [CmdletBinding()]
 param(
-    [string]$SetupPath = (Join-Path (Split-Path -Parent $PSScriptRoot) 'dist\installer\Velomux-Setup-0.2.3-preview-Win-x64.exe'),
+    [string]$SetupPath = (Join-Path (Split-Path -Parent $PSScriptRoot) 'dist\installer\Velomux-Setup-0.3.0-preview-Win-x64.exe'),
     [string]$InstallDir = (Join-Path $env:TEMP 'VelomuxInstallerSmoke')
 )
 $ErrorActionPreference = 'Stop'
@@ -12,6 +12,8 @@ if (-not (Test-Path -LiteralPath $SetupPath -PathType Leaf)) {
 }
 $exe = Join-Path $InstallDir 'Velomux.exe'
 $uninstaller = Join-Path $InstallDir 'unins000.exe'
+$contextVerb = 'Registry::HKEY_CURRENT_USER\Software\Classes\*\shell\Velomux'
+$contextCommand = "$contextVerb\command"
 if (Test-Path -LiteralPath $InstallDir) {
     throw "Refusing to overwrite an existing test installation folder: $InstallDir"
 }
@@ -20,12 +22,19 @@ $priorQpa = $env:QT_QPA_PLATFORM
 try {
     Write-Host 'Installing Velomux in a temporary test folder...' -ForegroundColor Cyan
     $proc = Start-Process -FilePath $SetupPath -ArgumentList @(
-        '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=`"$InstallDir`""
+        '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/TASKS=explorercontext', "/DIR=`"$InstallDir`""
     ) -PassThru -Wait
     if ($proc.ExitCode -ne 0) { throw "Inno installer exited with $($proc.ExitCode)" }
     $installed = $true
     if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
         throw 'Velomux.exe was not found after installation.'
+    }
+    if (-not (Test-Path -LiteralPath $contextCommand)) {
+        throw 'Optional Explorer context command was not installed.'
+    }
+    $verbText = (Get-Item -LiteralPath $contextCommand).GetValue('')
+    if (-not $verbText.Contains('Velomux.exe') -or -not $verbText.Contains('%1')) {
+        throw "Invalid installed Explorer context command: $verbText"
     }
     $env:QT_QPA_PLATFORM = 'offscreen'
     foreach ($mode in @('--self-test', '--gui-smoke-test', '--media-integration-test')) {
@@ -52,6 +61,9 @@ finally {
         if ($removal.ExitCode -ne 0) { throw "Uninstaller exited with $($removal.ExitCode)" }
         if (Test-Path -LiteralPath $exe -PathType Leaf) {
             throw 'Velomux.exe still exists after uninstall.'
+        }
+        if (Test-Path -LiteralPath $contextVerb) {
+            throw 'Optional Explorer context verb remains after uninstall.'
         }
     }
 }

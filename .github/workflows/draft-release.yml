@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing tag matching version.py (example: v0.2.3-preview)'
+        description: 'Existing tag matching version.py (example: v0.3.0-preview)'
         required: true
         type: string
       reviewer_confirmed:
@@ -73,7 +73,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force 'dist\release-assets' | Out-Null
           $inputs = @(
-            'dist\installer\Velomux-Setup-0.2.3-preview-Win-x64.exe',
+            'dist\installer\Velomux-Setup-0.3.0-preview-Win-x64.exe',
             'dist\Velomux-Windows-Portable-x64.zip'
           )
           $checksums = foreach ($file in $inputs) {

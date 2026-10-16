@@ -31,6 +31,8 @@ from engine import (
     compatibility, convert, describe, validate_options, which_tools,
 )
 from toolchain import tools_origin
+from velomux_flows import (FLOWS, FLOWS_BY_ID, PROFILE_BY_ID, recommended_preset,
+                           destination_for, media_paths_from_arguments)
 from version import APP_NAME, APP_VERSION, GITHUB_REPOSITORY
 
 BG = '#090E19'
@@ -72,6 +74,10 @@ QPushButton#Ghost:hover { background: #1E2A40; color: #F6F8FF; }
 QPushButton#Nav { background: transparent; border: none; border-radius: 12px; text-align: left; padding: 13px 16px; color: #9DB0CA; font-weight: 600; }
 QPushButton#Nav:hover { background: #18263B; color: #F7F9FD; }
 QPushButton#Nav[active="true"] { background: #27264D; color: #E6E1FF; border-left: 3px solid #8980FF; }
+QPushButton#FlowCard { background: #19263B; color: #E3EAF7; border: 1px solid #32445D; border-radius: 12px; padding: 9px 10px; text-align: left; font-size: 10pt; font-weight: 700; }
+QPushButton#FlowCard:hover { background: #24375A; border: 1px solid #8980FF; }
+QPushButton#FlowCard:checked { background: #353266; border: 2px solid #A69CFF; color: #FFFFFF; }
+
 QComboBox, QLineEdit, QSpinBox, QDoubleSpinBox { background: #182338; border: 1px solid #2D3C54; border-radius: 9px; padding: 8px 11px; selection-background-color: #635DCF; min-height: 20px; }
 QComboBox:focus, QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus { border: 1px solid #8980FF; }
 QComboBox QAbstractItemView { background: #182338; color: #F0F4FA; selection-background-color: #3C427C; border: 1px solid #34445E; }
@@ -203,6 +209,7 @@ def hbox(spacing: int = 10) -> QHBoxLayout:
 class QueueEntry:
     source: Path
     preset: str
+    import_root: Path | None = None
     state: str = 'Waiting'
     percent: float = 0.0
     output: str = ''
@@ -521,42 +528,54 @@ class MainWindow(QMainWindow):
         return pane
 
     def _settings_panel(self) -> QWidget:
-        # Make the entire settings side independently scrollable. Fixed-height
-        # inspector and cramped Qt tabs previously left advanced controls hidden.
-        column = vbox(11)
-        column.addWidget(label('Conversion settings', 'Section'))
-        column.addWidget(label('Choose from the format library, then fine-tune only when needed.'))
+        column = vbox(12)
+        column.addWidget(label('VeloFlow conversion', 'Section'))
+        column.addWidget(label('Start with what you want to do. Fine-tune only when needed.'))
+
+        self.mode = WheelSafeComboBox()
+        self.mode.addItems(['Quick mode', 'Advanced mode'])
+        self._group_input(column, 'WORKSPACE MODE', self.mode)
+        self.mode.currentIndexChanged.connect(self._toggle_mode)
+
+        # Quick mode has its own visible task-first workflow, not a hidden
+        # advanced dropdown that defaults all incoming MP4s to M4A.
+        self.quick_panel = self._quick_flow_panel()
+        column.addWidget(self.quick_panel)
+
+        # Keep every original advanced option intact and discoverable.
+        self.advanced_formats = QWidget()
+        advanced = vbox(9)
+        advanced.setContentsMargins(0, 0, 0, 0)
+        advanced.addWidget(label('Advanced format library', 'Section'))
         self.family = WheelSafeComboBox()
-        self.family.addItems(['Audio', 'Video', 'Image'])
+        self.family.addItems(['Video', 'Audio', 'Image'])
         self.family.currentTextChanged.connect(self._update_presets)
-        self._group_input(column, 'MEDIA CATEGORY', self.family)
+        self._group_input(advanced, 'MEDIA CATEGORY', self.family)
         self.preset_search = QLineEdit()
-        self.preset_search.setPlaceholderText('Search formats, codecs, or bitrates...')
+        self.preset_search.setPlaceholderText('Search codecs, formats and bitrates...')
         self.preset_search.setClearButtonEnabled(True)
         self.preset_search.textChanged.connect(self._filter_preset_library)
-        column.addWidget(self.preset_search)
-        self.library_count = label('Loading available presets...')
-        column.addWidget(self.library_count)
+        advanced.addWidget(self.preset_search)
+        self.library_count = label('Loading formats...')
+        advanced.addWidget(self.library_count)
         self.preset_list = QListWidget()
         self.preset_list.setObjectName('PresetLibrary')
-        self.preset_list.setMinimumHeight(170)
-        self.preset_list.setMaximumHeight(196)
+        self.preset_list.setMinimumHeight(178)
+        self.preset_list.setMaximumHeight(205)
         self.preset_list.currentItemChanged.connect(self._choose_list_preset)
-        column.addWidget(self.preset_list)
+        advanced.addWidget(self.preset_list)
         self.preset = WheelSafeComboBox()
         self.preset.setEditable(True)
         self.preset.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.preset.completer().setFilterMode(Qt.MatchFlag.MatchContains)
         self.preset.completer().setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self.preset.currentTextChanged.connect(self._sync_preset_list)
-        self._group_input(column, 'SELECTED OUTPUT FORMAT', self.preset)
-        self.mode = WheelSafeComboBox()
-        self.mode.addItems(['Quick mode', 'Advanced mode'])
-        self._group_input(column, 'CONTROLS MODE', self.mode)
-        self.mode.currentIndexChanged.connect(self._toggle_mode)
-        self.apply_button = button('Apply preset to selected files', self.apply_preset, 'Primary')
-        column.addWidget(self.apply_button)
-        column.addWidget(label('Selected formats apply automatically to new compatible imports. Use the button above for files already in the queue.'))
+        self._group_input(advanced, 'SELECTED OUTPUT FORMAT', self.preset)
+        self.apply_button = button('Apply format to selected files', self.apply_preset, 'Primary')
+        advanced.addWidget(self.apply_button)
+        self.advanced_formats.setLayout(advanced)
+        column.addWidget(self.advanced_formats)
+
         self.tabs = QTabWidget()
         self.tabs.addTab(self._general_tab(), 'General')
         self.tabs.addTab(self._video_tab(), 'Video')
@@ -564,30 +583,134 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self._image_tab(), 'Images')
         self.tabs.addTab(self._trim_tab(), 'Trim')
         self.tabs.setDocumentMode(True)
-        self.tabs.setMinimumHeight(282)
+        self.tabs.setMinimumHeight(270)
         column.addWidget(self.tabs)
+
+        # Quick-trim inputs share the exact advanced trim state and safe
+        # mouse-wheel behavior; a stream-copy cut is keyframe-limited.
+        self.quick_trim_start.valueChanged.connect(self.trim_start.setValue)
+        self.quick_trim_end.valueChanged.connect(self.trim_end.setValue)
+        self.trim_start.valueChanged.connect(self.quick_trim_start.setValue)
+        self.trim_end.valueChanged.connect(self.quick_trim_end.setValue)
+
         self.inspector_dialog = QDialog(self)
         self.inspector_dialog.setWindowTitle('Velomux · Media inspector')
         self.inspector_dialog.resize(620, 340)
         dialog_layout = vbox(12)
         self.inspector = QTextEdit()
         self.inspector.setReadOnly(True)
-        self.inspector.setPlainText('Select an input to see its codecs, duration, tracks and conversion results.')
+        self.inspector.setPlainText('Select media to see its codecs, tracks and conversion result.')
         dialog_layout.addWidget(self.inspector, 1)
         dialog_layout.addWidget(button('Close inspector', self.inspector_dialog.close))
         self.inspector_dialog.setLayout(dialog_layout)
-        column.addWidget(button('Inspect selected media / conversion details  ↗', self._show_inspector))
-        column.addStretch(1)
+        column.addWidget(button('Inspect selected file and streams ↗', self._show_inspector))
+        column.addStretch()
+
         inner = card(column, 'Panel', 17)
-        inner.setObjectName('Panel')
         scroller = QScrollArea()
         scroller.setWidgetResizable(True)
         scroller.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroller.setWidget(inner)
-        scroller.setMinimumWidth(355)
-        self._update_presets('Audio')
+        scroller.setMinimumWidth(360)
+        self._update_presets('Video')
         self._toggle_mode()
         return scroller
+
+    def _quick_flow_panel(self) -> QWidget:
+        self._quick_task_id = None
+        layout = vbox(11)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(label('CHOOSE AN ACTION', 'Caption'))
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(8)
+        self.flow_buttons = {}
+        for index, task in enumerate(FLOWS):
+            b = QPushButton(task.title)
+            b.setObjectName('FlowCard')
+            b.setCheckable(True)
+            b.setMinimumHeight(54)
+            b.setToolTip(task.tagline)
+            b.clicked.connect(lambda checked=False, ident=task.id: self._select_quick_task(ident))
+            self.flow_buttons[task.id] = b
+            grid.addWidget(b, index // 2, index % 2)
+        layout.addLayout(grid)
+        self.quick_task_help = label(
+            'Choose Video, Audio, Images, Extract audio, Compress, Rewrap or Trim. '
+            'New imports are assigned a compatible suggestion; nothing converts until you press Start.'
+        )
+        layout.addWidget(self.quick_task_help)
+        self.quick_profiles = WheelSafeComboBox()
+        self.quick_profiles.setEnabled(False)
+        self.quick_profiles.addItem('Select an action above...', None)
+        self.quick_profiles.currentIndexChanged.connect(self._quick_profile_changed)
+        self._group_input(layout, 'OUTPUT PROFILE', self.quick_profiles)
+        self.quick_profile_detail = label('Purpose-based profiles keep the technical settings underneath.')
+        layout.addWidget(self.quick_profile_detail)
+
+        self.quick_trim_box = QWidget()
+        trim_layout = vbox(5)
+        trim_layout.setContentsMargins(0, 0, 0, 0)
+        self.quick_trim_start = self._float_spin(0, 360000, 0, 0.5)
+        self.quick_trim_end = self._float_spin(0, 360000, 0, 0.5, 'End of file')
+        self._group_input(trim_layout, 'START · SECONDS', self.quick_trim_start)
+        self._group_input(trim_layout, 'END · SECONDS', self.quick_trim_end)
+        trim_layout.addWidget(label(
+            'Fast stream-copy cuts align with video keyframes and are not frame-accurate.'
+        ))
+        self.quick_trim_box.setLayout(trim_layout)
+        self.quick_trim_box.setVisible(False)
+        layout.addWidget(self.quick_trim_box)
+
+        self.quick_apply_button = button(
+            'Apply this profile to selected queue files', self.apply_preset, 'Primary'
+        )
+        self.quick_apply_button.setEnabled(False)
+        layout.addWidget(self.quick_apply_button)
+        layout.addWidget(label(
+            'New compatible files get this profile automatically. '
+            'Existing queue choices change only when you apply them.'
+        ))
+        widget = QWidget()
+        widget.setLayout(layout)
+        return widget
+
+    def _select_quick_task(self, task_id: str) -> None:
+        task = FLOWS_BY_ID.get(task_id)
+        if task is None:
+            return
+        self._quick_task_id = task_id
+        for ident, b in self.flow_buttons.items():
+            b.setChecked(ident == task_id)
+        help_text = task.tagline
+        if task.warning:
+            help_text += ' · ' + task.warning
+        self.quick_task_help.setText(help_text)
+        self.quick_profiles.blockSignals(True)
+        self.quick_profiles.clear()
+        for preset in task.profiles:
+            self.quick_profiles.addItem(preset.label, preset.id)
+            self.quick_profiles.setItemData(self.quick_profiles.count()-1,
+                                            preset.detail, Qt.ItemDataRole.ToolTipRole)
+        self.quick_profiles.blockSignals(False)
+        self.quick_profiles.setEnabled(True)
+        self.quick_profiles.setCurrentIndex(0)
+        self.quick_apply_button.setEnabled(True)
+        self.quick_trim_box.setVisible(task_id == 'trim')
+        self._quick_profile_changed()
+
+    def _quick_profile_changed(self, index: int = -1) -> None:
+        if not self.quick_profiles.isEnabled() or not self._quick_task_id:
+            return
+        ident = self.quick_profiles.currentData()
+        chosen = PROFILE_BY_ID.get(str(ident))
+        if chosen is None:
+            return
+        self.quick_profile_detail.setText(chosen.detail)
+        engine_preset = PRESET_MAP[chosen.preset]
+        self.family.setCurrentText(engine_preset.group.title())
+        self.preset.setCurrentText(chosen.preset)
+        self._sync_preset_list(chosen.preset)
 
     def _show_inspector(self):
         self.show_selected_info()
@@ -695,10 +818,13 @@ class MainWindow(QMainWindow):
         self._group_input(l, 'EXISTING FILE HANDLING', self.collision)
         self.recursive = QCheckBox('Include subfolders when importing folders')
         self.recursive.setChecked(True)
+        self.preserve_tree = QCheckBox('Preserve imported folder structure in custom output')
+        self.preserve_tree.setChecked(True)
         self.keep_metadata = QCheckBox('Preserve metadata where supported')
         self.keep_metadata.setChecked(True)
         self.full_verify = QCheckBox('Full output stream validation (slower)')
         l.addWidget(self.recursive)
+        l.addWidget(self.preserve_tree)
         l.addWidget(self.keep_metadata)
         l.addWidget(self.full_verify)
         l.addWidget(label('Safeguard: new files are staged, validated, then moved into place. Originals are never overwritten.'))
@@ -821,20 +947,79 @@ class MainWindow(QMainWindow):
 
     def _about_page(self) -> QWidget:
         page = QWidget()
-        l = vbox(15)
-        l.setContentsMargins(0,0,0,0)
-        l.addWidget(label('Velomux', 'Title'))
-        l.addWidget(label('An offline-first video, audio and image converter, powered by FFmpeg and Pillow. An open-source release is planned.'))
-        l.addWidget(label(f'Preview build  {APP_VERSION}'))
-        l.addWidget(label('Contributors are welcome once the public repository and licensing package are ready.'))
-        l.addWidget(label('The app itself does not upload your media. Update checks, when enabled, require a GitHub request initiated by the user.'))
-        l.addWidget(label('FFmpeg / Qt / Pillow are third-party components. Release distributors must satisfy their respective license requirements.'))
-        l.addStretch()
-        page.setLayout(l)
+        layout = vbox(17)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        brand_line = hbox(15)
+        logo = label('', 'Logo')
+        logo.setPixmap(brand_pixmap(72))
+        logo.setFixedSize(72, 72)
+        brand_line.addWidget(logo)
+        product_line = vbox(3)
+        product_line.addWidget(label('Velomux', 'Title'))
+        product_line.addWidget(label('Convert your media, your way.', 'SubTitle'))
+        product_line.addWidget(label(f'Version {APP_VERSION} · Development preview'))
+        brand_line.addLayout(product_line)
+        brand_line.addStretch(1)
+        layout.addLayout(brand_line)
+
+        overview = vbox(10)
+        overview.addWidget(label('ABOUT THE PROJECT', 'Caption'))
+        overview.addWidget(label(
+            'Velomux is an independent, offline-first video, audio and image '
+            'workstation. VeloFlow provides task-first conversions while Advanced '
+            'Mode exposes codec and processing controls.'
+        ))
+        layout.addWidget(card(overview, 'Panel', 18))
+
+        people = vbox(9)
+        people.addWidget(label('PROJECT MAINTENANCE', 'Caption'))
+        people.addWidget(label('Maintained by Adam Knight (@admknight)', 'Section'))
+        people.addWidget(label(
+            'Source, issue tracking and development builds are managed through '
+            'the official Velomux GitHub repository.'
+        ))
+        links = hbox(9)
+        links.addWidget(button(
+            'GitHub repository ↗',
+            lambda: QDesktopServices.openUrl(
+                QUrl('https://github.com/admknight/Velomux')
+            )
+        ))
+        links.addWidget(button(
+            'Report a problem ↗',
+            lambda: QDesktopServices.openUrl(
+                QUrl('https://github.com/admknight/Velomux/issues')
+            )
+        ))
+        links.addStretch(1)
+        people.addLayout(links)
+        layout.addWidget(card(people, 'Panel', 18))
+
+        licenses = vbox(10)
+        licenses.addWidget(label('TECHNOLOGY & CREDITS', 'Caption'))
+        licenses.addWidget(label(
+            'Media processing: FFmpeg / ffprobe. Interface: Qt 6 for Python '
+            '(PySide6). Images: Pillow. Thanks to their contributors and maintainers.'
+        ))
+        licenses.addWidget(label(
+            'The application license and full third-party redistribution package '
+            'are pending approval for a public open-source release. '
+            'This preview must not be presented as a cleared public release.'
+        ))
+        licenses.addWidget(label(
+            'Your media is processed locally. An optional update check contacts '
+            'GitHub only after you request it.'
+        ))
+        layout.addWidget(card(licenses, 'Panel', 18))
+        layout.addStretch(1)
+        page.setLayout(layout)
         return page
 
     def _toggle_mode(self):
         advanced = self.mode.currentIndex() == 1
+        self.advanced_formats.setVisible(advanced)
+        self.quick_panel.setVisible(not advanced)
         for index in range(1, self.tabs.count()):
             self.tabs.setTabVisible(index, advanced)
 
@@ -847,10 +1032,18 @@ class MainWindow(QMainWindow):
         self.output.setText(str(self.settings.value('output_directory',str(Path.home()/'Downloads'/'Converted'))))
         self.beside_source.setChecked(str(self.settings.value('beside_source','true')).lower() == 'true')
         self.recursive.setChecked(str(self.settings.value('recursive','true')).lower() == 'true')
+        self.preserve_tree.setChecked(str(self.settings.value('preserve_tree','true')).lower() == 'true')
         self.keep_metadata.setChecked(str(self.settings.value('metadata','true')).lower() == 'true')
         index=self.collision.findData(str(self.settings.value('collision','repair')))
         if index >= 0: self.collision.setCurrentIndex(index)
         self.mode.setCurrentIndex(int(self.settings.value('mode',0)))
+        flow_id = str(self.settings.value('flow_task', '') or '')
+        if flow_id in FLOWS_BY_ID:
+            self._select_quick_task(flow_id)
+            profile_id = str(self.settings.value('flow_profile', '') or '')
+            index = self.quick_profiles.findData(profile_id)
+            if index >= 0:
+                self.quick_profiles.setCurrentIndex(index)
         geometry=self.settings.value('geometry')
         if geometry is not None: self.restoreGeometry(geometry)
 
@@ -858,6 +1051,9 @@ class MainWindow(QMainWindow):
         self.settings.setValue('output_directory',self.output.text())
         self.settings.setValue('beside_source',self.beside_source.isChecked())
         self.settings.setValue('recursive',self.recursive.isChecked())
+        self.settings.setValue('preserve_tree',self.preserve_tree.isChecked())
+        self.settings.setValue('flow_task',self._quick_task_id or '')
+        self.settings.setValue('flow_profile',self.quick_profiles.currentData() or '')
         self.settings.setValue('metadata',self.keep_metadata.isChecked())
         self.settings.setValue('collision',self.collision.currentData())
         self.settings.setValue('geometry',self.saveGeometry())
@@ -908,37 +1104,73 @@ class MainWindow(QMainWindow):
         if self.worker and self.worker.isRunning():
             return
         selected = PRESET_MAP.get(self.preset.currentText())
-        found: list[Path] = []
+        is_quick = self.mode.currentIndex() == 0
+        task_id = self._quick_task_id if is_quick else None
+        profile_id = self.quick_profiles.currentData() if task_id else None
+        found: list[tuple[Path, Path | None]] = []
         for path in paths:
             if path.is_file():
-                found.append(path)
+                found.append((path, None))
             elif path.is_dir():
                 walk = path.rglob('*') if self.recursive.isChecked() else path.iterdir()
                 try:
                     for sub in walk:
-                        if not sub.is_file(): continue
-                        if self.recursive.isChecked() and any(part.lower() == 'converted' for part in sub.relative_to(path).parts[:-1]): continue
-                        found.append(sub)
+                        if not sub.is_file():
+                            continue
+                        if self.recursive.isChecked() and any(
+                            part.lower() == 'converted'
+                            for part in sub.relative_to(path).parts[:-1]
+                        ):
+                            continue
+                        found.append((sub, path))
                 except (OSError, PermissionError) as exc:
                     self._add_log(f'[WARNING] Could not scan all files in {path}: {exc}')
-        count=0
-        for file in found:
-            if file.suffix.lower() not in SUPPORTED_SUFFIXES: continue
+        count = 0
+        incompatible = 0
+        for file, folder_root in found:
+            if file.suffix.lower() not in SUPPORTED_SUFFIXES:
+                continue
             key = self._path_key(file)
-            if key in self.seen: continue
+            if key in self.seen:
+                continue
             kind = classify(file)
-            chosen = selected if selected and compatibility(file,selected) else next((p for p in PRESETS if p.group==kind),None)
-            if not chosen: continue
+            if task_id:
+                name = recommended_preset(kind, task_id, str(profile_id))
+                if not name:
+                    incompatible += 1
+                    self._add_log(
+                        f'[NOT QUEUED] {file.name}: unsupported input for '
+                        f'{FLOWS_BY_ID[task_id].title}.'
+                    )
+                    continue
+            elif not is_quick and selected and compatibility(file, selected):
+                name = selected.name
+            else:
+                # The default MUST NEVER convert imported videos to M4A
+                # without an explicit Extract Audio task selection.
+                name = recommended_preset(kind)
+            if not name:
+                incompatible += 1
+                continue
             self.seen.add(key)
-            self.entries.append(QueueEntry(file.resolve(),chosen.name))
+            self.entries.append(QueueEntry(
+                file.resolve(), name,
+                folder_root.resolve() if folder_root else None
+            ))
             row = self.table.rowCount()
             self.table.insertRow(row)
             self._render_row(row)
-            count+=1
+            count += 1
         self._metrics()
         self._filter_queue(self.queue_search.text())
-        self.status.setText(f'{len(self.entries)} files in queue · {count} added')
-        self._add_log(f'Added {count} files to queue.')
+        message = f'{len(self.entries)} in queue · {count} added'
+        if incompatible:
+            message += f' · {incompatible} incompatible'
+        self.status.setText(message)
+        self._add_log(
+            f'Added {count} compatible media file(s). '
+            + (f'Skipped {incompatible} incompatible input(s).' if incompatible else '')
+        )
 
     def add_files(self):
         patterns=' '.join('*'+suffix for suffix in sorted(SUPPORTED_SUFFIXES))
@@ -1017,6 +1249,10 @@ class MainWindow(QMainWindow):
             if not compatibility(entry.source,preset):
                 self._add_log(f'[IGNORED] {entry.source.name}: not compatible with {preset.group} preset.')
                 continue
+            if self.mode.currentIndex() == 0 and self._quick_task_id:
+                if classify(entry.source) not in FLOWS_BY_ID[self._quick_task_id].input_kinds:
+                    self._add_log(f'[IGNORED] {entry.source.name}: incompatible with selected VeloFlow.')
+                    continue
             entry.preset=name
             entry.state='Waiting'
             entry.percent=0.0
@@ -1054,7 +1290,8 @@ class MainWindow(QMainWindow):
     def _set_processing(self, processing: bool):
         for widget in (self.add_button,self.folder_button,self.remove_button,self.clear_button,
                        self.apply_button,self.preset,self.family,self.tabs,self.collision,
-                       self.beside_source,self.output,self.recursive):
+                       self.beside_source,self.output,self.recursive,self.preserve_tree,
+                       self.quick_panel,self.mode):
             widget.setEnabled(not processing)
         self.start_button.setEnabled(not processing)
         self.cancel_button.setEnabled(processing)
@@ -1064,6 +1301,11 @@ class MainWindow(QMainWindow):
         if not self.entries:
             QMessageBox.information(self,'Empty queue','Add files or a folder to convert first.')
             return
+        if self.mode.currentIndex() == 0 and self._quick_task_id == 'trim':
+            if self.trim_start.value() == 0 and self.trim_end.value() == 0:
+                QMessageBox.warning(self, 'Trim range required',
+                                    'Set a start or end time for the Trim workflow.')
+                return
         try:
             opt=self._options()
             custom=self.output.text().strip()
@@ -1082,7 +1324,9 @@ class MainWindow(QMainWindow):
         jobs=[]
         planned=set()
         for i,e in enumerate(self.entries):
-            directory=e.source.parent/'Converted' if self.beside_source.isChecked() else target_dir
+            directory = (e.source.parent/'Converted' if self.beside_source.isChecked()
+                         else destination_for(e.source, target_dir, e.import_root,
+                                              self.preserve_tree.isChecked()))
             stem=e.source.stem
             ext=PRESET_MAP[e.preset].ext
             pathkey=self._path_key(directory/(stem+ext))
@@ -1264,6 +1508,11 @@ def main():
     app.setFont(QFont('Segoe UI',10))
     ui=MainWindow()
     ui.show()
+    # Windows Explorer's optional right-click entry passes a quoted filename.
+    # Never start encoding on launch; just queue supported local files.
+    incoming = media_paths_from_arguments(sys.argv[1:])
+    if incoming:
+        ui.import_paths(incoming)
     return app.exec()
 
 
