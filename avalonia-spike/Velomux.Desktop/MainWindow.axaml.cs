@@ -12,6 +12,35 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _activeBatch;
     private MainViewModel Vm => (MainViewModel)DataContext!;
 
+    // The published EXE must pass this against its REAL opened Avalonia window
+    // before GitHub publishes another evaluation artifact. Static XML checks
+    // do not establish that runtime styles and state bindings are functional.
+    internal void AssertInitialUiReady()
+    {
+        var empty = this.FindControl<StackPanel>("EmptyQueuePanel")
+                    ?? throw new InvalidOperationException("Empty queue panel is missing.");
+        var queued = this.FindControl<Grid>("QueueDataPanel")
+                     ?? throw new InvalidOperationException("Queue data panel is missing.");
+        var settings = this.FindControl<ScrollViewer>("SettingsViewport")
+                       ?? throw new InvalidOperationException("Settings viewport is missing.");
+        var m4a = this.FindControl<Button>("M4aFormatButton")
+                  ?? throw new InvalidOperationException("M4A choice is missing.");
+        var mp3 = this.FindControl<Button>("Mp3FormatButton")
+                  ?? throw new InvalidOperationException("MP3 choice is missing.");
+        if (!Vm.IsQueueEmpty || !empty.IsVisible || queued.IsVisible)
+            throw new InvalidOperationException("Empty queue view is not correctly displayed.");
+        if (!Vm.IsM4a || Vm.IsMp3 || !m4a.Classes.Contains("active")
+            || mp3.Classes.Contains("active"))
+            throw new InvalidOperationException("M4A/MP3 selected-format visual state is incorrect.");
+        if (settings.Bounds.Width <= 0 || settings.Bounds.Height <= 0)
+            throw new InvalidOperationException("Settings panel has no rendered layout dimensions.");
+        // Cancelling a file dialog must not change the initial ready status.
+        string originalStatus = Vm.Status;
+        Vm.AddFiles(Array.Empty<string>());
+        if (Vm.Status != originalStatus)
+            throw new InvalidOperationException("Empty file picker incorrectly changed status.");
+    }
+
     public MainWindow()
     {
         InitializeComponent();
