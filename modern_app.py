@@ -31,6 +31,7 @@ from engine import (
     compatibility, convert, describe, validate_options, which_tools,
 )
 from toolchain import tools_origin
+from velomux_flows import FLOWS, FLOWS_BY_ID, PROFILE_BY_ID, recommended_preset, destination_for
 from version import APP_NAME, APP_VERSION, GITHUB_REPOSITORY
 
 BG = '#090E19'
@@ -521,42 +522,54 @@ class MainWindow(QMainWindow):
         return pane
 
     def _settings_panel(self) -> QWidget:
-        # Make the entire settings side independently scrollable. Fixed-height
-        # inspector and cramped Qt tabs previously left advanced controls hidden.
-        column = vbox(11)
-        column.addWidget(label('Conversion settings', 'Section'))
-        column.addWidget(label('Choose from the format library, then fine-tune only when needed.'))
+        column = vbox(12)
+        column.addWidget(label('VeloFlow conversion', 'Section'))
+        column.addWidget(label('Start with what you want to do. Fine-tune only when needed.'))
+
+        self.mode = WheelSafeComboBox()
+        self.mode.addItems(['Quick mode', 'Advanced mode'])
+        self._group_input(column, 'WORKSPACE MODE', self.mode)
+        self.mode.currentIndexChanged.connect(self._toggle_mode)
+
+        # Quick mode has its own visible task-first workflow, not a hidden
+        # advanced dropdown that defaults all incoming MP4s to M4A.
+        self.quick_panel = self._quick_flow_panel()
+        column.addWidget(self.quick_panel)
+
+        # Keep every original advanced option intact and discoverable.
+        self.advanced_formats = QWidget()
+        advanced = vbox(9)
+        advanced.setContentsMargins(0, 0, 0, 0)
+        advanced.addWidget(label('Advanced format library', 'Section'))
         self.family = WheelSafeComboBox()
-        self.family.addItems(['Audio', 'Video', 'Image'])
+        self.family.addItems(['Video', 'Audio', 'Image'])
         self.family.currentTextChanged.connect(self._update_presets)
-        self._group_input(column, 'MEDIA CATEGORY', self.family)
+        self._group_input(advanced, 'MEDIA CATEGORY', self.family)
         self.preset_search = QLineEdit()
-        self.preset_search.setPlaceholderText('Search formats, codecs, or bitrates...')
+        self.preset_search.setPlaceholderText('Search codecs, formats and bitrates...')
         self.preset_search.setClearButtonEnabled(True)
         self.preset_search.textChanged.connect(self._filter_preset_library)
-        column.addWidget(self.preset_search)
-        self.library_count = label('Loading available presets...')
-        column.addWidget(self.library_count)
+        advanced.addWidget(self.preset_search)
+        self.library_count = label('Loading formats...')
+        advanced.addWidget(self.library_count)
         self.preset_list = QListWidget()
         self.preset_list.setObjectName('PresetLibrary')
-        self.preset_list.setMinimumHeight(170)
-        self.preset_list.setMaximumHeight(196)
+        self.preset_list.setMinimumHeight(178)
+        self.preset_list.setMaximumHeight(205)
         self.preset_list.currentItemChanged.connect(self._choose_list_preset)
-        column.addWidget(self.preset_list)
+        advanced.addWidget(self.preset_list)
         self.preset = WheelSafeComboBox()
         self.preset.setEditable(True)
         self.preset.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.preset.completer().setFilterMode(Qt.MatchFlag.MatchContains)
         self.preset.completer().setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self.preset.currentTextChanged.connect(self._sync_preset_list)
-        self._group_input(column, 'SELECTED OUTPUT FORMAT', self.preset)
-        self.mode = WheelSafeComboBox()
-        self.mode.addItems(['Quick mode', 'Advanced mode'])
-        self._group_input(column, 'CONTROLS MODE', self.mode)
-        self.mode.currentIndexChanged.connect(self._toggle_mode)
-        self.apply_button = button('Apply preset to selected files', self.apply_preset, 'Primary')
-        column.addWidget(self.apply_button)
-        column.addWidget(label('Selected formats apply automatically to new compatible imports. Use the button above for files already in the queue.'))
+        self._group_input(advanced, 'SELECTED OUTPUT FORMAT', self.preset)
+        self.apply_button = button('Apply format to selected files', self.apply_preset, 'Primary')
+        advanced.addWidget(self.apply_button)
+        self.advanced_formats.setLayout(advanced)
+        column.addWidget(self.advanced_formats)
+
         self.tabs = QTabWidget()
         self.tabs.addTab(self._general_tab(), 'General')
         self.tabs.addTab(self._video_tab(), 'Video')
@@ -564,30 +577,134 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self._image_tab(), 'Images')
         self.tabs.addTab(self._trim_tab(), 'Trim')
         self.tabs.setDocumentMode(True)
-        self.tabs.setMinimumHeight(282)
+        self.tabs.setMinimumHeight(270)
         column.addWidget(self.tabs)
+
+        # Quick-trim inputs share the exact advanced trim state and safe
+        # mouse-wheel behavior; a stream-copy cut is keyframe-limited.
+        self.quick_trim_start.valueChanged.connect(self.trim_start.setValue)
+        self.quick_trim_end.valueChanged.connect(self.trim_end.setValue)
+        self.trim_start.valueChanged.connect(self.quick_trim_start.setValue)
+        self.trim_end.valueChanged.connect(self.quick_trim_end.setValue)
+
         self.inspector_dialog = QDialog(self)
         self.inspector_dialog.setWindowTitle('Velomux · Media inspector')
         self.inspector_dialog.resize(620, 340)
         dialog_layout = vbox(12)
         self.inspector = QTextEdit()
         self.inspector.setReadOnly(True)
-        self.inspector.setPlainText('Select an input to see its codecs, duration, tracks and conversion results.')
+        self.inspector.setPlainText('Select media to see its codecs, tracks and conversion result.')
         dialog_layout.addWidget(self.inspector, 1)
         dialog_layout.addWidget(button('Close inspector', self.inspector_dialog.close))
         self.inspector_dialog.setLayout(dialog_layout)
-        column.addWidget(button('Inspect selected media / conversion details  ↗', self._show_inspector))
-        column.addStretch(1)
+        column.addWidget(button('Inspect selected file and streams ↗', self._show_inspector))
+        column.addStretch()
+
         inner = card(column, 'Panel', 17)
-        inner.setObjectName('Panel')
         scroller = QScrollArea()
         scroller.setWidgetResizable(True)
         scroller.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroller.setWidget(inner)
-        scroller.setMinimumWidth(355)
-        self._update_presets('Audio')
+        scroller.setMinimumWidth(360)
+        self._update_presets('Video')
         self._toggle_mode()
         return scroller
+
+    def _quick_flow_panel(self) -> QWidget:
+        self._quick_task_id = None
+        layout = vbox(11)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(label('CHOOSE AN ACTION', 'Caption'))
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(8)
+        self.flow_buttons = {}
+        for index, task in enumerate(FLOWS):
+            b = QPushButton(task.title)
+            b.setObjectName('FlowCard')
+            b.setCheckable(True)
+            b.setMinimumHeight(54)
+            b.setToolTip(task.tagline)
+            b.clicked.connect(lambda checked=False, ident=task.id: self._select_quick_task(ident))
+            self.flow_buttons[task.id] = b
+            grid.addWidget(b, index // 2, index % 2)
+        layout.addLayout(grid)
+        self.quick_task_help = label(
+            'Choose Video, Audio, Images, Extract audio, Compress, Rewrap or Trim. '
+            'New imports are assigned a compatible suggestion; nothing converts until you press Start.'
+        )
+        layout.addWidget(self.quick_task_help)
+        self.quick_profiles = WheelSafeComboBox()
+        self.quick_profiles.setEnabled(False)
+        self.quick_profiles.addItem('Select an action above...', None)
+        self.quick_profiles.currentIndexChanged.connect(self._quick_profile_changed)
+        self._group_input(layout, 'OUTPUT PROFILE', self.quick_profiles)
+        self.quick_profile_detail = label('Purpose-based profiles keep the technical settings underneath.')
+        layout.addWidget(self.quick_profile_detail)
+
+        self.quick_trim_box = QWidget()
+        trim_layout = vbox(5)
+        trim_layout.setContentsMargins(0, 0, 0, 0)
+        self.quick_trim_start = self._float_spin(0, 360000, 0, 0.5)
+        self.quick_trim_end = self._float_spin(0, 360000, 0, 0.5, 'End of file')
+        self._group_input(trim_layout, 'START · SECONDS', self.quick_trim_start)
+        self._group_input(trim_layout, 'END · SECONDS', self.quick_trim_end)
+        trim_layout.addWidget(label(
+            'Fast stream-copy cuts align with video keyframes and are not frame-accurate.'
+        ))
+        self.quick_trim_box.setLayout(trim_layout)
+        self.quick_trim_box.setVisible(False)
+        layout.addWidget(self.quick_trim_box)
+
+        self.quick_apply_button = button(
+            'Apply this profile to selected queue files', self.apply_preset, 'Primary'
+        )
+        self.quick_apply_button.setEnabled(False)
+        layout.addWidget(self.quick_apply_button)
+        layout.addWidget(label(
+            'New compatible files get this profile automatically. '
+            'Existing queue choices change only when you apply them.'
+        ))
+        widget = QWidget()
+        widget.setLayout(layout)
+        return widget
+
+    def _select_quick_task(self, task_id: str) -> None:
+        task = FLOWS_BY_ID.get(task_id)
+        if task is None:
+            return
+        self._quick_task_id = task_id
+        for ident, b in self.flow_buttons.items():
+            b.setChecked(ident == task_id)
+        help_text = task.tagline
+        if task.warning:
+            help_text += ' · ' + task.warning
+        self.quick_task_help.setText(help_text)
+        self.quick_profiles.blockSignals(True)
+        self.quick_profiles.clear()
+        for preset in task.profiles:
+            self.quick_profiles.addItem(preset.label, preset.id)
+            self.quick_profiles.setItemData(self.quick_profiles.count()-1,
+                                            preset.detail, Qt.ItemDataRole.ToolTipRole)
+        self.quick_profiles.blockSignals(False)
+        self.quick_profiles.setEnabled(True)
+        self.quick_profiles.setCurrentIndex(0)
+        self.quick_apply_button.setEnabled(True)
+        self.quick_trim_box.setVisible(task_id == 'trim')
+        self._quick_profile_changed()
+
+    def _quick_profile_changed(self, index: int = -1) -> None:
+        if not self.quick_profiles.isEnabled() or not self._quick_task_id:
+            return
+        ident = self.quick_profiles.currentData()
+        chosen = PROFILE_BY_ID.get(str(ident))
+        if chosen is None:
+            return
+        self.quick_profile_detail.setText(chosen.detail)
+        engine_preset = PRESET_MAP[chosen.preset]
+        self.family.setCurrentText(engine_preset.group.title())
+        self.preset.setCurrentText(chosen.preset)
+        self._sync_preset_list(chosen.preset)
 
     def _show_inspector(self):
         self.show_selected_info()
