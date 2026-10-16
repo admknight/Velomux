@@ -75,6 +75,11 @@ jobs:
           if (-not (Test-Path -LiteralPath $backend)) { throw 'Frozen backend executable missing' }
           & $backend --integration-test
           if ($LASTEXITCODE -ne 0) { throw 'Frozen engine real conversion regression failed' }
+          $catalogJson = & $backend --catalog
+          if ($LASTEXITCODE -ne 0) { throw 'Frozen backend catalog failed under redirected Windows stdout' }
+          $catalog = $catalogJson | ConvertFrom-Json
+          if ($catalog.presets.Count -ne 51 -or $catalog.tasks.Count -ne 7) { throw 'Packaged media catalog is incomplete' }
+          Write-Host "Frozen media catalog PASS: $($catalog.presets.Count) presets, $($catalog.tasks.Count) tasks."
       - name: Compile and publish self-contained Avalonia Windows executable
         shell: pwsh
         run: |
