@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_product_identity_and_no_old_brand():
     assert APP_NAME == 'Velomux'
-    assert APP_VERSION == '0.2.3-preview'
+    assert APP_VERSION == '0.3.0-preview'
     for relative in ('modern_app.py','app.py','engine.py','cli.py','version.py',
                      'README.md','installer/Velomux.iss','scripts/build_windows.ps1'):
         assert ('scope' + 'wise') not in (ROOT/relative).read_text(encoding='utf-8').lower()
@@ -30,12 +30,12 @@ def test_windows_ico_contains_brand_and_multiple_sizes():
 def test_inno_setup_source_matches_app_and_build_output():
     setup = (ROOT/'installer/Velomux.iss').read_text(encoding='utf-8')
     build = (ROOT/'scripts/build_windows.ps1').read_text(encoding='utf-8')
-    assert '#define ProductVersion "0.2.3"' in setup
+    assert '#define ProductVersion "0.3.0"' in setup
     assert 'SetupArchitecture=x64' in setup
     assert 'PrivilegesRequired=lowest' in setup
     assert 'Source: "..\\dist\\Velomux\\*"' in setup
     assert 'Velomux.exe' in setup
-    assert 'Velomux-Setup-0.2.3-preview-Win-x64.exe' in build
+    assert 'Velomux-Setup-0.3.0-preview-Win-x64.exe' in build
     assert '--add-binary "${ffmpeg};vendor/ffmpeg/bin"' in build
     assert '--add-binary "${ffprobe};vendor/ffmpeg/bin"' in build
     assert '--add-data' in build and 'velomux.png' in build
