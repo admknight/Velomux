@@ -44,6 +44,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            StartupDiagnostics.Record("ENGINE_CATALOG_FAILURE: " + ex);
             Vm.AddActivity("MEDIA ENGINE UNAVAILABLE: " + ex.Message);
         }
     }
@@ -53,7 +54,7 @@ public partial class MainWindow : Window
         _catalogLoadTask ??= LoadCatalogSafeAsync();
         await _catalogLoadTask;
         if (!Vm.IsCatalogLoaded)
-            throw new InvalidOperationException("Frozen Velomux backend did not provide its 51-preset catalog.");
+            throw new InvalidOperationException("Frozen Velomux backend did not provide its 51-preset catalog: " + Vm.Status);
     }
 
     private void UpdateResponsiveShell()
