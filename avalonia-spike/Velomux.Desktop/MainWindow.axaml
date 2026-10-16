@@ -164,7 +164,7 @@
                     DragDrop.DragOver="Media_DragOver"
                     DragDrop.Drop="Media_Drop">
               <Grid>
-                <Grid RowDefinitions="Auto,*" IsVisible="{Binding HasQueue}">
+                <Grid x:Name="QueueDataPanel" RowDefinitions="Auto,*" IsVisible="{Binding HasQueue}">
                   <Grid Margin="14,11" ColumnDefinitions="*,120">
                     <TextBlock Text="MEDIA FILE" Classes="eyebrow"/>
                     <TextBlock Grid.Column="1" Text="STATUS" Classes="eyebrow"/>
@@ -191,7 +191,7 @@
                   </ListBox>
                 </Grid>
 
-                <StackPanel IsVisible="{Binding IsQueueEmpty}"
+                <StackPanel x:Name="EmptyQueuePanel" IsVisible="{Binding IsQueueEmpty}"
                             HorizontalAlignment="Center" VerticalAlignment="Center"
                             Spacing="12" Margin="25" MaxWidth="480">
                   <Border Background="#283054" Width="68" Height="68"
@@ -227,7 +227,7 @@
 
         <Border Grid.Column="1" Classes="card">
           <!-- The settings workspace has ONE scroll region, not nested tabs. -->
-          <ScrollViewer VerticalScrollBarVisibility="Auto"
+          <ScrollViewer x:Name="SettingsViewport" VerticalScrollBarVisibility="Auto"
                         HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="18,19,21,21" Spacing="14">
               <Grid ColumnDefinitions="*,Auto">
@@ -249,7 +249,7 @@
 
               <TextBlock Text="OUTPUT FORMAT" Classes="eyebrow"/>
               <Grid ColumnDefinitions="*,*" ColumnSpacing="9">
-                <Button Grid.Column="0" Classes="formatChoice"
+                <Button x:Name="M4aFormatButton" Grid.Column="0" Classes="formatChoice"
                         Classes.active="{Binding IsM4a}" Click="M4a_Click">
                   <StackPanel Spacing="5">
                     <TextBlock Text="M4A · AAC" FontSize="15" FontWeight="SemiBold"/>
@@ -257,7 +257,7 @@
                                Foreground="#AFC3DB"/>
                   </StackPanel>
                 </Button>
-                <Button Grid.Column="1" Classes="formatChoice"
+                <Button x:Name="Mp3FormatButton" Grid.Column="1" Classes="formatChoice"
                         Classes.active="{Binding IsMp3}" Click="Mp3_Click">
                   <StackPanel Spacing="5">
                     <TextBlock Text="MP3" FontSize="15" FontWeight="SemiBold"/>
