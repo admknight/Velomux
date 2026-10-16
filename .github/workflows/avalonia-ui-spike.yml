@@ -51,3 +51,7 @@ jobs:
         run: dotnet restore avalonia-spike/Velomux.Desktop/Velomux.Desktop.csproj
       - name: Build Avalonia UI on Linux
         run: dotnet build avalonia-spike/Velomux.Desktop/Velomux.Desktop.csproj -c Release --no-restore -warnaserror
+      - name: Install FFmpeg integration toolchain
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Execute REAL MP4-to-M4A and MP3 conversion integration tests
+        run: dotnet run --project avalonia-spike/Velomux.Desktop/Velomux.Desktop.csproj -c Release --no-build -- --media-integration-test
