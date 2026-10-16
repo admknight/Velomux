@@ -2,7 +2,7 @@
 # No system-wide configuration is changed; Inno Setup installer is per-user.
 [CmdletBinding()]
 param(
-    [string]$SetupPath = (Join-Path (Split-Path -Parent $PSScriptRoot) 'dist\installer\Velomux-Setup-0.2.1-preview-Win-x64.exe'),
+    [string]$SetupPath = (Join-Path (Split-Path -Parent $PSScriptRoot) 'dist\installer\Velomux-Setup-0.2.2-preview-Win-x64.exe'),
     [string]$InstallDir = (Join-Path $env:TEMP 'VelomuxInstallerSmoke')
 )
 $ErrorActionPreference = 'Stop'
@@ -28,7 +28,7 @@ try {
         throw 'Velomux.exe was not found after installation.'
     }
     $env:QT_QPA_PLATFORM = 'offscreen'
-    foreach ($mode in @('--self-test', '--gui-smoke-test')) {
+    foreach ($mode in @('--self-test', '--gui-smoke-test', '--media-integration-test')) {
         Write-Host "Testing installed executable: $mode"
         $probe = Start-Process -FilePath $exe -ArgumentList $mode -PassThru -Wait
         if ($probe.ExitCode -ne 0) {

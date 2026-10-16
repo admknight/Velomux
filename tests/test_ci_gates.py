@@ -30,6 +30,8 @@ def test_private_build_checks_source_frozen_and_installed_app():
     assert 'run.py --gui-smoke-test' in builder
     assert "-ArgumentList '--gui-smoke-test'" in builder
     assert 'test_installer_windows.ps1' in pipeline
+    assert '--media-integration-test' in builder
+    assert '--media-integration-test' in installer_test
     assert "'--self-test', '--gui-smoke-test'" in installer_test
     assert 'unins000.exe' in installer_test
     assert 'SHA256SUMS.txt' in pipeline

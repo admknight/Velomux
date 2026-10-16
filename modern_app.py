@@ -12,15 +12,15 @@ from pathlib import Path
 import subprocess
 import sys
 import threading
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 import json
 
 from PySide6.QtCore import Qt, QSettings, QThread, Signal, QUrl, QSize
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QKeySequence, QShortcut, QIcon, QPainter, QBrush, QPixmap, QPen
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFrame,
-    QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
+    QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QFrame,
+    QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
     QProgressBar, QPushButton, QScrollArea, QSizePolicy, QSpinBox, QSplitter,
     QStackedWidget, QStyle, QTabWidget, QTableWidget, QTableWidgetItem,
     QTextEdit, QVBoxLayout, QWidget, QHeaderView, QAbstractItemView,
@@ -46,14 +46,16 @@ DANGER = '#FF7E9A'
 
 STYLE = '''
 QWidget { background: #090E19; color: #F0F4FA; font-family: "Segoe UI", "Inter", Arial; font-size: 10pt; }
+QLabel { background: transparent; border: none; }
+QWidget#SettingsInner { background: #11192A; }
 QWidget#MainArea { background: #090E19; }
 QFrame#SideBar { background: #0F1727; border-right: 1px solid #243047; }
-QFrame#Panel, QFrame#Card, QFrame#MiniCard { background: #11192A; border: 1px solid #243047; border-radius: 16px; }
+QFrame#Panel, QFrame#Card, QFrame#MiniCard { background: #11192A; border: 1px solid #2B3A52; border-radius: 16px; }
 QFrame#MiniCard { border-radius: 13px; }
 QFrame#DropZone { background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #22254D,stop:1 #10343D); border: 1px dashed #686FBF; border-radius: 14px; }
-QLabel#Title { font-size: 24pt; font-weight: 800; color: #F5F8FF; }
+QLabel#Title { font-size: 22pt; font-weight: 750; color: #F5F8FF; }
 QLabel#SubTitle { font-size: 9pt; color: #96A6BC; }
-QLabel#Section { font-size: 14pt; font-weight: 700; }
+QLabel#Section { font-size: 13pt; font-weight: 720; }
 QLabel#Caption { font-size: 9pt; color: #96A6BC; }
 QLabel#Logo { background: transparent; border: none; }
 QLabel#MetricValue { font-size: 19pt; font-weight: 800; }
@@ -87,6 +89,12 @@ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
 QTableWidget { background: #11192A; alternate-background-color: #141F32; gridline-color: transparent; border: none; selection-background-color: #28395D; selection-color: #F5F7FF; outline: none; }
 QTableWidget::item { padding-left: 7px; border-bottom: 1px solid #1C2A40; }
 QTableWidget::item:selected { background: #28395D; }
+QListWidget#PresetLibrary { background: #121F32; border: 1px solid #2D405B; border-radius: 10px; font-size: 10pt; outline: none; }
+QListWidget#PresetLibrary::item { padding: 10px 9px; border-bottom: 1px solid #26354B; }
+QListWidget#PresetLibrary::item:selected { background: #393A72; color: #FFFFFF; border-left: 3px solid #958CFF; }
+QListWidget#PresetLibrary::item:hover:!selected { background: #202F47; }
+QLabel#ErrorBanner { background: #3A2130; border: 1px solid #855060; border-radius: 10px; color: #FFD2DC; padding: 10px 12px; font-size: 10pt; }
+QFrame#ToolBadge { background: #16312E; border: none; border-radius: 10px; }
 QHeaderView::section { background: #172237; color: #99ACC6; font-size: 9pt; font-weight: 700; padding: 12px 8px; border: none; border-bottom: 1px solid #293750; }
 QProgressBar { background: #243147; color: #F8FAFD; border-radius: 5px; border: none; text-align: center; min-height: 9px; }
 QProgressBar::chunk { background: #8980FF; border-radius: 5px; }
@@ -98,7 +106,7 @@ QSplitter::handle { background: transparent; width: 10px; }
 def label(text: str, object_name: str = 'Caption') -> QLabel:
     obj = QLabel(text)
     obj.setObjectName(object_name)
-    obj.setWordWrap(True)
+    obj.setWordWrap(object_name not in ('Title', 'Section', 'MetricValue', 'MetricLabel'))
     return obj
 
 
@@ -220,8 +228,13 @@ class UpdateWorker(QThread):
             if not tag or not page.startswith('https://github.com/'):
                 raise ValueError('Unexpected release API response.')
             self.result_ready.emit(f'Latest published release: {tag}\nYour installed version: {APP_VERSION}\nReview the verified release and download it at:\n{page}')
-        except (OSError, ValueError, URLError) as exc:
-            self.result_ready.emit('Could not check GitHub Releases: ' + str(exc))
+        except HTTPError as exc:
+            if exc.code == 404:
+                self.result_ready.emit('No public Velomux release is available yet. This is a private development preview; new builds are currently shared as GitHub Actions test artifacts.')
+            else:
+                self.result_ready.emit(f'Update service returned HTTP {exc.code}. Your installed converter remains available offline.')
+        except (OSError, ValueError, URLError):
+            self.result_ready.emit('Unable to check for updates right now. Local conversion is unaffected; try again when connected.')
 
 
 def nav_icon(kind: str) -> QIcon:
@@ -417,6 +430,15 @@ class MainWindow(QMainWindow):
         table.setMinimumHeight(170)
         self.table = table
         column.addWidget(table, 1)
+        error_row = hbox(10)
+        self.failure_banner = label('', 'ErrorBanner')
+        self.failure_banner.setWordWrap(True)
+        self.failure_banner.hide()
+        error_row.addWidget(self.failure_banner, 1)
+        self.error_log_button = button('View errors', lambda: self._change_page(1))
+        self.error_log_button.hide()
+        error_row.addWidget(self.error_log_button)
+        column.addLayout(error_row)
         totals = hbox(9)
         totals.addWidget(label('BATCH PROGRESS', 'Caption'))
         self.percent_label = label('0%', 'Caption')
@@ -441,27 +463,42 @@ class MainWindow(QMainWindow):
         return pane
 
     def _settings_panel(self) -> QWidget:
-        column = vbox(10)
+        # Make the entire settings side independently scrollable. Fixed-height
+        # inspector and cramped Qt tabs previously left advanced controls hidden.
+        column = vbox(11)
         column.addWidget(label('Conversion settings', 'Section'))
-        column.addWidget(label('Choose a format. Fine-tune options whenever needed.'))
+        column.addWidget(label('Choose from the format library, then fine-tune only when needed.'))
         self.family = QComboBox()
-        self.family.addItems(['Audio','Video','Image'])
+        self.family.addItems(['Audio', 'Video', 'Image'])
         self.family.currentTextChanged.connect(self._update_presets)
-        column.addWidget(label('FORMAT FAMILY'))
-        column.addWidget(self.family)
+        self._group_input(column, 'MEDIA CATEGORY', self.family)
+        self.preset_search = QLineEdit()
+        self.preset_search.setPlaceholderText('Search formats, codecs, or bitrates...')
+        self.preset_search.setClearButtonEnabled(True)
+        self.preset_search.textChanged.connect(self._filter_preset_library)
+        column.addWidget(self.preset_search)
+        self.library_count = label('Loading available presets...')
+        column.addWidget(self.library_count)
+        self.preset_list = QListWidget()
+        self.preset_list.setObjectName('PresetLibrary')
+        self.preset_list.setMinimumHeight(170)
+        self.preset_list.setMaximumHeight(196)
+        self.preset_list.currentItemChanged.connect(self._choose_list_preset)
+        column.addWidget(self.preset_list)
         self.preset = QComboBox()
-        column.addWidget(label('OUTPUT PRESET'))
-        column.addWidget(self.preset)
         self.preset.setEditable(True)
         self.preset.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.preset.completer().setFilterMode(Qt.MatchFlag.MatchContains)
         self.preset.completer().setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self.preset.currentTextChanged.connect(self._sync_preset_list)
+        self._group_input(column, 'SELECTED OUTPUT FORMAT', self.preset)
         self.mode = QComboBox()
-        self.mode.addItems(['Quick mode','Advanced mode'])
+        self.mode.addItems(['Quick mode', 'Advanced mode'])
         self._group_input(column, 'CONTROLS MODE', self.mode)
         self.mode.currentIndexChanged.connect(self._toggle_mode)
-        self.apply_button = button('Apply preset to selected files', self.apply_preset)
+        self.apply_button = button('Apply preset to selected files', self.apply_preset, 'Primary')
         column.addWidget(self.apply_button)
+        column.addWidget(label('Selected formats apply automatically to new compatible imports. Use the button above for files already in the queue.'))
         self.tabs = QTabWidget()
         self.tabs.addTab(self._general_tab(), 'General')
         self.tabs.addTab(self._video_tab(), 'Video')
@@ -469,18 +506,81 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self._image_tab(), 'Images')
         self.tabs.addTab(self._trim_tab(), 'Trim')
         self.tabs.setDocumentMode(True)
-        column.addWidget(self.tabs, 1)
-        column.addWidget(label('MEDIA INSPECTOR  ·  SELECTED FILE'))
+        self.tabs.setMinimumHeight(282)
+        column.addWidget(self.tabs)
+        self.inspector_dialog = QDialog(self)
+        self.inspector_dialog.setWindowTitle('Velomux · Media inspector')
+        self.inspector_dialog.resize(620, 340)
+        dialog_layout = vbox(12)
         self.inspector = QTextEdit()
         self.inspector.setReadOnly(True)
-        self.inspector.setFixedHeight(116)
-        self.inspector.setPlainText('Select a file to see its codec, resolution, duration and tracks.')
-        column.addWidget(self.inspector)
-        pane = card(column)
-        pane.setMinimumWidth(355)
+        self.inspector.setPlainText('Select an input to see its codecs, duration, tracks and conversion results.')
+        dialog_layout.addWidget(self.inspector, 1)
+        dialog_layout.addWidget(button('Close inspector', self.inspector_dialog.close))
+        self.inspector_dialog.setLayout(dialog_layout)
+        column.addWidget(button('Inspect selected media / conversion details  ↗', self._show_inspector))
+        column.addStretch(1)
+        inner = card(column, 'Panel', 17)
+        inner.setObjectName('Panel')
+        scroller = QScrollArea()
+        scroller.setWidgetResizable(True)
+        scroller.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroller.setWidget(inner)
+        scroller.setMinimumWidth(355)
         self._update_presets('Audio')
         self._toggle_mode()
-        return pane
+        return scroller
+
+    def _show_inspector(self):
+        self.show_selected_info()
+        self.inspector_dialog.show()
+        self.inspector_dialog.raise_()
+        self.inspector_dialog.activateWindow()
+
+    def _choose_list_preset(self, item, previous):
+        if item is None:
+            return
+        chosen = str(item.data(Qt.ItemDataRole.UserRole))
+        if chosen and self.preset.currentText() != chosen:
+            self.preset.setCurrentText(chosen)
+
+    def _sync_preset_list(self, name: str):
+        if not hasattr(self, 'preset_list'):
+            return
+        for index in range(self.preset_list.count()):
+            item = self.preset_list.item(index)
+            if item.data(Qt.ItemDataRole.UserRole) == name:
+                if self.preset_list.currentItem() is not item:
+                    self.preset_list.blockSignals(True)
+                    self.preset_list.setCurrentItem(item)
+                    self.preset_list.blockSignals(False)
+                return
+
+    def _filter_preset_library(self, query: str):
+        if not hasattr(self, 'preset_list'):
+            return
+        group = self.family.currentText().lower()
+        selected = self.preset.currentText()
+        candidates = [p for p in PRESETS if p.group == group]
+        term = query.casefold().strip()
+        self.preset_list.blockSignals(True)
+        self.preset_list.clear()
+        for preset in candidates:
+            if term and term not in preset.name.casefold():
+                continue
+            item = QListWidgetItem(preset.name)
+            item.setData(Qt.ItemDataRole.UserRole, preset.name)
+            item.setToolTip(
+                f'Output: {preset.ext.upper()}   ·   Video: {preset.vcodec or "none"}   ·   Audio: {preset.acodec or "none"}'
+            )
+            self.preset_list.addItem(item)
+            if preset.name == selected:
+                self.preset_list.setCurrentItem(item)
+        self.preset_list.blockSignals(False)
+        count = self.preset_list.count()
+        self.library_count.setText(
+            f'{count} visible {group} presets  ·  {len(candidates)} in category  ·  {len(PRESETS)} total'
+        )
 
     def _tab_shell(self) -> tuple[QWidget,QVBoxLayout]:
         page = QWidget()
@@ -587,7 +687,7 @@ class MainWindow(QMainWindow):
         w,l = self._tab_shell()
         self.image_width = self._group_input(l,'MAX WIDTH · PX',self._spin(0,32768,0,'Source'))
         self.image_height = self._group_input(l,'MAX HEIGHT · PX',self._spin(0,32768,0,'Source'))
-        self.image_quality = self._group_input(l,'QUALITY · 1–100',self._spin(1,100,90))
+        self.image_quality = self._group_input(l,'IMAGE QUALITY · PRESET OR 1–100',self._spin(0,100,0,'Preset default'))
         self.image_rotate = QComboBox()
         self.image_rotate.addItems(['0','90','180','270'])
         self._group_input(l,'ROTATE CLOCKWISE',self.image_rotate)
@@ -707,8 +807,14 @@ class MainWindow(QMainWindow):
 
     def _update_presets(self, family: str):
         values = [p.name for p in PRESETS if p.group == family.lower()]
+        self.preset.blockSignals(True)
         self.preset.clear()
         self.preset.addItems(values)
+        self.preset.blockSignals(False)
+        if hasattr(self, 'preset_search'):
+            self.preset_search.clear()
+        self._filter_preset_library('')
+
 
     def _show_tools(self):
         a, b = which_tools()
@@ -792,7 +898,8 @@ class MainWindow(QMainWindow):
         values=[e.source.name,classify(e.source).upper(),f'{size:,.1f} MB',PRESET_MAP[e.preset].ext.upper().lstrip('.'),e.state]
         for c,value in enumerate(values):
             item=QTableWidgetItem(value)
-            item.setToolTip(str(e.source))
+            note = (e.note or '').strip()
+            item.setToolTip(f'{e.source}\n{note}' if note else str(e.source))
             if c == 4:
                 item.setForeground(QBrush(QColor(MINT if e.state in ('Done','Skipped') else DANGER if e.state=='Failed' else AMBER if e.state=='Running' else MUTED)))
             self.table.setItem(index,c,item)
@@ -822,6 +929,8 @@ class MainWindow(QMainWindow):
         self.total_progress.setValue(0)
         self.percent_label.setText('0%')
         self._metrics()
+        self.failure_banner.hide()
+        self.error_log_button.hide()
         self.inspector.setPlainText('Select a file to see its codec, resolution, duration and tracks.')
 
     def show_selected_info(self):
@@ -831,6 +940,7 @@ class MainWindow(QMainWindow):
         try: info=describe(e.source)
         except Exception as exc: info=f'Unable to inspect media: {exc}'
         if e.output: info += '\nOutput: '+e.output
+        if e.note: info += '\n\nCONVERSION RESULT: ' + e.state.upper() + '\n' + e.note
         self.inspector.setPlainText(info)
 
     def apply_preset(self):
@@ -931,7 +1041,10 @@ class MainWindow(QMainWindow):
             self._render_row(i)
             jobs.append((i,e.source,directory,e.preset,stem))
         self.total_progress.setValue(0)
+        self.total_progress.setStyleSheet('')
         self.percent_label.setText('0%')
+        self.failure_banner.hide()
+        self.error_log_button.hide()
         self._set_processing(True)
         self._metrics()
         self.worker=Worker(jobs,opt)
@@ -968,6 +1081,15 @@ class MainWindow(QMainWindow):
         self._metrics()
         prefix = 'OK' if state == 'Done' else state.upper()
         self._add_log(f'[{prefix}] {e.source.name}: {detail}')
+        if state == 'Failed':
+            self.failure_banner.setText(
+                f'{sum(row.state == "Failed" for row in self.entries)} conversion(s) failed. '
+                'Select a failed row for its error, or open Activity for full diagnostics.'
+            )
+            self.failure_banner.show()
+            self.error_log_button.show()
+        elif self.inspector_dialog.isVisible():
+            self.show_selected_info()
         count=sum(row.state in ('Done','Skipped','Failed','Cancelled') for row in self.entries)
         value=100*count/max(1,len(self.entries))
         self.total_progress.setValue(int(value))
@@ -978,6 +1100,21 @@ class MainWindow(QMainWindow):
         counts={name:sum(e.state==name for e in self.entries) for name in ('Done','Skipped','Failed','Cancelled')}
         summary=' · '.join(f'{name} {value}' for name,value in counts.items() if value)
         self.status.setText('Batch finished. '+summary)
+        failed = counts['Failed']
+        if failed:
+            self.total_progress.setStyleSheet(
+                'QProgressBar {background:#283047;border-radius:5px;border:none;}'
+                'QProgressBar::chunk {background:#FF7E9A;border-radius:5px;}'
+            )
+            self.failure_banner.setText(
+                f'{failed} conversion(s) failed. No original file was modified. '
+                'Open Activity for the exact error messages before trying again.'
+            )
+            self.failure_banner.show()
+            self.error_log_button.show()
+            self._change_page(0)
+        else:
+            self.total_progress.setStyleSheet('')
         self._add_log('Batch finished. '+summary)
 
     def _thread_finished(self):

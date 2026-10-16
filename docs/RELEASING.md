@@ -1,6 +1,6 @@
 # Velomux release policy — Windows test builds and reviewed draft releases
 
-The source is currently `0.2.1-preview` and not publicly release-cleared. There is no approved application `LICENSE`, registered official GitHub repository, or reviewed FFmpeg redistributable bundle in this source package.
+The source is currently `0.2.2-preview` and not publicly release-cleared. There is no approved application `LICENSE`, registered official GitHub repository, or reviewed FFmpeg redistributable bundle in this source package.
 
 1. **Development runs:** Trigger **Build Windows test installer** in GitHub Actions. This read-only workflow builds, tests the actual Qt window, freezes the Windows app, tests the frozen app, creates the Inno installer, silently installs/tests/uninstalls it, and uploads a temporary Actions artifact with checksums and build provenance. It must not publish a Release.
 2. **Independent Windows test:** Test the installer on a Windows 10/11 x64 machine without a system Python/FFmpeg installation. Check core audio/video/image conversions, metadata, cancellation, repaired incomplete outputs, source preservation, settings, install/upgrade, and uninstall. This is independent of CI because GitHub Windows runners already contain other development software.
