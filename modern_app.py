@@ -1042,37 +1042,73 @@ class MainWindow(QMainWindow):
         if self.worker and self.worker.isRunning():
             return
         selected = PRESET_MAP.get(self.preset.currentText())
-        found: list[Path] = []
+        is_quick = self.mode.currentIndex() == 0
+        task_id = self._quick_task_id if is_quick else None
+        profile_id = self.quick_profiles.currentData() if task_id else None
+        found: list[tuple[Path, Path | None]] = []
         for path in paths:
             if path.is_file():
-                found.append(path)
+                found.append((path, None))
             elif path.is_dir():
                 walk = path.rglob('*') if self.recursive.isChecked() else path.iterdir()
                 try:
                     for sub in walk:
-                        if not sub.is_file(): continue
-                        if self.recursive.isChecked() and any(part.lower() == 'converted' for part in sub.relative_to(path).parts[:-1]): continue
-                        found.append(sub)
+                        if not sub.is_file():
+                            continue
+                        if self.recursive.isChecked() and any(
+                            part.lower() == 'converted'
+                            for part in sub.relative_to(path).parts[:-1]
+                        ):
+                            continue
+                        found.append((sub, path))
                 except (OSError, PermissionError) as exc:
                     self._add_log(f'[WARNING] Could not scan all files in {path}: {exc}')
-        count=0
-        for file in found:
-            if file.suffix.lower() not in SUPPORTED_SUFFIXES: continue
+        count = 0
+        incompatible = 0
+        for file, folder_root in found:
+            if file.suffix.lower() not in SUPPORTED_SUFFIXES:
+                continue
             key = self._path_key(file)
-            if key in self.seen: continue
+            if key in self.seen:
+                continue
             kind = classify(file)
-            chosen = selected if selected and compatibility(file,selected) else next((p for p in PRESETS if p.group==kind),None)
-            if not chosen: continue
+            if task_id:
+                name = recommended_preset(kind, task_id, str(profile_id))
+                if not name:
+                    incompatible += 1
+                    self._add_log(
+                        f'[NOT QUEUED] {file.name}: unsupported input for '
+                        f'{FLOWS_BY_ID[task_id].title}.'
+                    )
+                    continue
+            elif not is_quick and selected and compatibility(file, selected):
+                name = selected.name
+            else:
+                # The default MUST NEVER convert imported videos to M4A
+                # without an explicit Extract Audio task selection.
+                name = recommended_preset(kind)
+            if not name:
+                incompatible += 1
+                continue
             self.seen.add(key)
-            self.entries.append(QueueEntry(file.resolve(),chosen.name))
+            self.entries.append(QueueEntry(
+                file.resolve(), name,
+                folder_root.resolve() if folder_root else None
+            ))
             row = self.table.rowCount()
             self.table.insertRow(row)
             self._render_row(row)
-            count+=1
+            count += 1
         self._metrics()
         self._filter_queue(self.queue_search.text())
-        self.status.setText(f'{len(self.entries)} files in queue · {count} added')
-        self._add_log(f'Added {count} files to queue.')
+        message = f'{len(self.entries)} in queue · {count} added'
+        if incompatible:
+            message += f' · {incompatible} incompatible'
+        self.status.setText(message)
+        self._add_log(
+            f'Added {count} compatible media file(s). '
+            + (f'Skipped {incompatible} incompatible input(s).' if incompatible else '')
+        )
 
     def add_files(self):
         patterns=' '.join('*'+suffix for suffix in sorted(SUPPORTED_SUFFIXES))
@@ -1226,7 +1262,9 @@ class MainWindow(QMainWindow):
         jobs=[]
         planned=set()
         for i,e in enumerate(self.entries):
-            directory=e.source.parent/'Converted' if self.beside_source.isChecked() else target_dir
+            directory = (e.source.parent/'Converted' if self.beside_source.isChecked()
+                         else destination_for(e.source, target_dir, e.import_root,
+                                              self.preserve_tree.isChecked()))
             stem=e.source.stem
             ext=PRESET_MAP[e.preset].ext
             pathkey=self._path_key(directory/(stem+ext))
