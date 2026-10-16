@@ -35,34 +35,64 @@ class Preset:
     acodec: str = ''
     bitrate: str = ''
     extra: tuple[str, ...] = ()
+    smart_copy: bool = False
+    video_quality_hint: int = 0
+    video_speed_hint: str = ''
+    image_quality_hint: int = 0
+    image_lossless: bool = False
 
 PRESETS: tuple[Preset, ...] = (
     Preset('MP4 - H.264 + AAC', 'video', '.mp4', 'libx264', 'aac', '192k'),
+    Preset('MP4 - H.264 high quality', 'video', '.mp4', 'libx264', 'aac', '192k', video_quality_hint=18),
+    Preset('MP4 - H.264 compact', 'video', '.mp4', 'libx264', 'aac', '160k', video_quality_hint=28),
+    Preset('MP4 - H.264 fast encoding', 'video', '.mp4', 'libx264', 'aac', '192k', video_speed_hint='veryfast'),
     Preset('MP4 - H.265 + AAC', 'video', '.mp4', 'libx265', 'aac', '192k'),
     Preset('MP4 - AV1 + AAC', 'video', '.mp4', 'libsvtav1', 'aac', '192k'),
     Preset('MKV - H.264 + AAC', 'video', '.mkv', 'libx264', 'aac', '192k'),
     Preset('MKV - H.265 + AAC', 'video', '.mkv', 'libx265', 'aac', '192k'),
+    Preset('MKV - AV1 + AAC', 'video', '.mkv', 'libsvtav1', 'aac', '192k'),
+    Preset('MOV - H.264 + AAC', 'video', '.mov', 'libx264', 'aac', '192k'),
     Preset('WebM - VP9 + Opus', 'video', '.webm', 'libvpx-vp9', 'libopus', '160k'),
     Preset('WebM - AV1 + Opus', 'video', '.webm', 'libsvtav1', 'libopus', '160k'),
     Preset('MOV - ProRes + PCM', 'video', '.mov', 'prores_ks', 'pcm_s16le'),
     Preset('MP4 - Remux / Stream copy', 'video', '.mp4', 'copy', 'copy'),
     Preset('MKV - Remux / Stream copy', 'video', '.mkv', 'copy', 'copy'),
+    Preset('MOV - Remux / Stream copy', 'video', '.mov', 'copy', 'copy'),
     Preset('Animated GIF - Video to GIF', 'video', '.gif', 'gif', 'none'),
-    Preset('M4A - AAC (smart copy)', 'audio', '.m4a', acodec='aac', bitrate='256k'),
+    Preset('M4A - AAC (smart copy)', 'audio', '.m4a', acodec='aac', bitrate='256k', smart_copy=True),
+    Preset('M4A - AAC 128 kbps', 'audio', '.m4a', acodec='aac', bitrate='128k'),
+    Preset('M4A - AAC 192 kbps', 'audio', '.m4a', acodec='aac', bitrate='192k'),
+    Preset('M4A - AAC 256 kbps', 'audio', '.m4a', acodec='aac', bitrate='256k'),
+    Preset('AAC - ADTS 192 kbps', 'audio', '.aac', acodec='aac', bitrate='192k'),
     Preset('M4A - ALAC lossless', 'audio', '.m4a', acodec='alac'),
     Preset('MP3 - 320 kbps', 'audio', '.mp3', acodec='libmp3lame', bitrate='320k'),
     Preset('MP3 - 192 kbps', 'audio', '.mp3', acodec='libmp3lame', bitrate='192k'),
+    Preset('MP3 - 256 kbps', 'audio', '.mp3', acodec='libmp3lame', bitrate='256k'),
+    Preset('MP3 - 128 kbps', 'audio', '.mp3', acodec='libmp3lame', bitrate='128k'),
     Preset('FLAC - Lossless', 'audio', '.flac', acodec='flac'),
     Preset('WAV - PCM 16-bit', 'audio', '.wav', acodec='pcm_s16le'),
+    Preset('WAV - PCM 24-bit', 'audio', '.wav', acodec='pcm_s24le'),
+    Preset('AIFF - PCM 16-bit', 'audio', '.aiff', acodec='pcm_s16be'),
+    Preset('AIFF - PCM 24-bit', 'audio', '.aiff', acodec='pcm_s24be'),
+    Preset('AC3 - Dolby Digital 448 kbps', 'audio', '.ac3', acodec='ac3', bitrate='448k'),
     Preset('Opus - 160 kbps', 'audio', '.opus', acodec='libopus', bitrate='160k'),
+    Preset('Opus - 96 kbps', 'audio', '.opus', acodec='libopus', bitrate='96k'),
+    Preset('Opus - 192 kbps', 'audio', '.opus', acodec='libopus', bitrate='192k'),
     Preset('OGG - Vorbis 192 kbps', 'audio', '.ogg', acodec='libvorbis', bitrate='192k'),
+    Preset('OGG - Vorbis 128 kbps', 'audio', '.ogg', acodec='libvorbis', bitrate='128k'),
     Preset('JPEG - Quality controlled', 'image', '.jpg'),
+    Preset('JPEG - High quality (95)', 'image', '.jpg', image_quality_hint=95),
+    Preset('JPEG - Compact (70)', 'image', '.jpg', image_quality_hint=70),
     Preset('PNG - Lossless', 'image', '.png'),
     Preset('WebP - Quality controlled', 'image', '.webp'),
+    Preset('WebP - High quality (95)', 'image', '.webp', image_quality_hint=95),
+    Preset('WebP - Compact (65)', 'image', '.webp', image_quality_hint=65),
+    Preset('WebP - Lossless', 'image', '.webp', image_lossless=True),
     Preset('TIFF - Lossless', 'image', '.tiff'),
     Preset('BMP - Uncompressed', 'image', '.bmp'),
     Preset('GIF - Image', 'image', '.gif'),
     Preset('AVIF - If supported', 'image', '.avif'),
+    Preset('ICO - Windows icon', 'image', '.ico'),
 )
 PRESET_MAP = {p.name: p for p in PRESETS}
 
@@ -88,7 +118,7 @@ class Options:
     media_speed: float = 1.0
     image_width: int = 0  # bounding box; preserve aspect ratio
     image_height: int = 0
-    image_quality: int = 90
+    image_quality: int = 0  # 0 follows the selected image preset
     rotate_image: int = 0
     flip_image: str = 'none'  # none, horizontal, vertical
     grayscale: bool = False
@@ -259,13 +289,13 @@ def _codec_args(preset: Preset, source_info: dict, opt: Options) -> list[str]:
         if opt.media_speed != 1: filter_list.append(f'atempo={opt.media_speed:.6f}')
         if filter_list: cmd += ['-af', ','.join(filter_list)]
         # Smart copy means no generational loss if already AAC and no audio processing.
-        can_copy = (preset.acodec == 'aac' and audio.get('codec_name') == 'aac'
+        can_copy = (preset.smart_copy and preset.acodec == 'aac' and audio.get('codec_name') == 'aac'
                     and not filter_list and not opt.audio_sample_rate and not opt.audio_channels)
         if can_copy: cmd += ['-c:a','copy']
         else:
             cmd += ['-c:a', preset.acodec]
             kbps = opt.audio_bitrate if opt.audio_bitrate else int(preset.bitrate[:-1]) if preset.bitrate else 0
-            if kbps and preset.acodec in ('aac','libmp3lame','libopus','libvorbis'):
+            if kbps and preset.acodec in ('aac','libmp3lame','libopus','libvorbis','ac3'):
                 cmd += ['-b:a', f'{kbps}k']
             if opt.audio_sample_rate: cmd += ['-ar',str(opt.audio_sample_rate)]
             if opt.audio_channels: cmd += ['-ac',str(opt.audio_channels)]
@@ -294,9 +324,11 @@ def _codec_args(preset: Preset, source_info: dict, opt: Options) -> list[str]:
         elif preset.vcodec == 'libvpx-vp9':
             cmd += ['-crf',str(opt.quality),'-b:v','0','-deadline','good','-cpu-used','2', '-pix_fmt','yuv420p']
         elif preset.vcodec == 'libsvtav1':
-            cmd += ['-crf',str(opt.quality), '-preset', '6', '-pix_fmt','yuv420p']
+            cmd += ['-crf',str(opt.quality if opt.quality != 23 else (preset.video_quality_hint or 23)), '-preset', '6', '-pix_fmt','yuv420p']
         else:
-            cmd += ['-crf',str(opt.quality),'-preset',opt.video_speed,'-pix_fmt','yuv420p']
+            quality = opt.quality if opt.quality != 23 else (preset.video_quality_hint or 23)
+            speed = opt.video_speed if opt.video_speed != 'medium' else (preset.video_speed_hint or 'medium')
+            cmd += ['-crf',str(quality),'-preset',speed,'-pix_fmt','yuv420p']
     if opt.mute_video or audio is None:
         cmd += ['-an']
     elif preset.acodec == 'copy':
@@ -334,7 +366,7 @@ def validate_options(opt: Options):
     if not (0 <= opt.quality <= 51): raise ConversionError('Video CRF must be between 0 and 51.')
     if opt.video_speed not in {'ultrafast','superfast','veryfast','faster','fast','medium','slow','slower','veryslow'}:
         raise ConversionError('Unknown video preset.')
-    if not (1 <= opt.image_quality <= 100): raise ConversionError('Image quality must be 1 to 100.')
+    if not (0 <= opt.image_quality <= 100): raise ConversionError('Image quality must be 0 (preset) or 1 to 100.')
     if not (0.5 <= opt.media_speed <= 2.0): raise ConversionError('Playback speed must be between 0.5 and 2.0.')
     if opt.trim_start < 0 or opt.trim_end < 0: raise ConversionError('Trim timestamps cannot be negative.')
     if opt.trim_end and opt.trim_end <= opt.trim_start: raise ConversionError('Trim end must be after trim start.')
@@ -368,7 +400,7 @@ def _image_transform(im: Image.Image, opt: Options) -> Image.Image:
 
 def _image_save(source: Path, temp: Path, preset: Preset, opt: Options,
                 cb: Callable[[float,str],None], cancel: threading.Event) -> None:
-    fmt={'.jpg':'JPEG','.png':'PNG','.webp':'WEBP','.tiff':'TIFF','.bmp':'BMP','.gif':'GIF','.avif':'AVIF'}[preset.ext]
+    fmt={'.jpg':'JPEG','.png':'PNG','.webp':'WEBP','.tiff':'TIFF','.bmp':'BMP','.gif':'GIF','.avif':'AVIF','.ico':'ICO'}[preset.ext]
     with Image.open(source) as source_im:
         frames = getattr(source_im, 'n_frames', 1)
         animated_output = frames > 1 and fmt in ('GIF','WEBP','TIFF')
@@ -386,7 +418,9 @@ def _image_save(source: Path, temp: Path, preset: Preset, opt: Options,
         def ensure():
             if cancel.is_set(): raise CancelledError('Cancelled')
         kwargs = {}
-        if fmt in ('JPEG','WEBP','AVIF'): kwargs['quality'] = opt.image_quality
+        quality = opt.image_quality if opt.image_quality else (preset.image_quality_hint or 90)
+        if fmt in ('JPEG','WEBP','AVIF'): kwargs['quality'] = quality
+        if fmt == 'WEBP' and preset.image_lossless: kwargs['lossless'] = True
         if fmt == 'JPEG': kwargs['optimize'] = True
         if fmt == 'PNG': kwargs['optimize'] = True
         if fmt == 'TIFF': kwargs['compression'] = 'tiff_deflate'
