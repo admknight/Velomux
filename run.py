@@ -118,6 +118,15 @@ def gui_smoke_test() -> int:
         window.preset_search.setText('MP3')
         assert window.preset_list.count() >= 3, 'Preset library search did not find MP3 alternatives.'
         window.preset_search.clear()
+        assert len(window.flow_buttons) == 7, 'VeloFlow task cards missing in packaged Qt UI.'
+        window.mode.setCurrentIndex(0)
+        assert not window.quick_panel.isHidden(), 'Quick Mode task panel is missing.'
+        assert window.advanced_formats.isHidden(), 'Advanced format list should be hidden in Quick Mode.'
+        window._select_quick_task('extract')
+        assert window.preset.currentText() == 'M4A - AAC (smart copy)', 'Audio extraction selection is not wired.'
+        window._select_quick_task('video')
+        assert window.preset.currentText() == 'MP4 - H.264 + AAC', 'Video action must not default to M4A.'
+        assert window.quick_profiles.count() >= 4, 'Purpose-based video profiles are unavailable.'
 
         # In the frozen EXE too, scrolling over a settings field must never
         # silently change its value. The full parent-scroll test runs in pytest.
@@ -146,6 +155,7 @@ def gui_smoke_test() -> int:
         assert window.tabs.isTabVisible(1), 'Advanced mode did not show video controls.'
         window.mode.setCurrentIndex(0)
         assert not window.tabs.isTabVisible(1), 'Quick mode did not hide advanced controls.'
+        window._change_page(0)
         window.show()
         app.processEvents()
         assert window.isVisible(), 'Qt could not show the main application window.'
