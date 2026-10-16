@@ -1,31 +1,27 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-echo Velomux Avalonia startup diagnostics
-echo -----------------------------------
-echo Launching the Windows evaluation executable...
-echo.
-if not exist "%~dp0Velomux.Avalonia.Spike.exe" (
-  echo ERROR: The executable was not found alongside this diagnostic script.
-  echo Please extract the complete ZIP before running.
+echo Velomux Avalonia media workstation - startup diagnostics
+echo -------------------------------------------------------
+if not exist "%~dp0Velomux.exe" (
+  echo ERROR: Velomux.exe was not found. Extract the entire ZIP or install the setup package.
   pause
   exit /b 2
 )
-"%~dp0Velomux.Avalonia.Spike.exe"
+echo Launching Velomux...
+"%~dp0Velomux.exe"
 set "RESULT=%ERRORLEVEL%"
 echo.
-echo Velomux exit code: %RESULT%
-echo.
+echo Application exit code: %RESULT%
 set "LOGFILE=%LOCALAPPDATA%\Velomux\Logs\avalonia-startup.log"
 if exist "%LOGFILE%" (
   echo Startup log: "%LOGFILE%"
   echo.
   type "%LOGFILE%"
 ) else (
-  echo No managed startup log exists. A failure before managed code started
-  echo may be recorded in Windows Event Viewer ^> Windows Logs ^> Application.
+  echo No application log was produced. Check Windows Event Viewer ^> Windows Logs ^> Application.
 )
 echo.
-echo Copy the error text if Velomux does not appear. Do not publish personal file paths.
+echo Do not share personal file paths or media filenames from this log.
 pause
 exit /b %RESULT%
