@@ -143,19 +143,27 @@ jobs:
           path: avalonia-spike/portable-output/
           retention-days: 14
           if-no-files-found: error
-      - name: Install official signed Inno Setup compiler
+      - name: Compile Windows Setup with version-pinned Inno 7 build tools
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $url = 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe'
-          $setup = Join-Path $env:RUNNER_TEMP 'innosetup-7.1.0-x64.exe'
-          Invoke-WebRequest -Uri $url -OutFile $setup
-          $sig = Get-AuthenticodeSignature -FilePath $setup
-          if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'Pyrsys B.V.') { throw 'Inno Setup Authenticode signature invalid' }
-          $proc = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/NORESTART','/SP-' -Wait -PassThru
-          if ($proc.ExitCode -ne 0) { throw 'Inno Setup installation failed' }
-          $iscc = @('C:\Program Files\Inno Setup 7\ISCC.exe','C:\Program Files (x86)\Inno Setup 7\ISCC.exe') | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $iscc) { throw 'ISCC.exe not found' }
+          # Inno's official GitHub EXE bootstrapper occasionally stalls on
+          # hosted Windows runners. Use the versioned compiler distribution
+          # from NuGet rather than silently bypassing installer QA.
+          $toolProject = Join-Path $env:RUNNER_TEMP 'VelomuxInstallerTool'
+          dotnet new classlib -o $toolProject --no-restore
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot initialize installer compiler restore project' }
+          $csproj = Join-Path $toolProject 'VelomuxInstallerTool.csproj'
+          dotnet add $csproj package Tools.InnoSetup --version 7.1.0 --no-restore
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot install pinned InnoSetup tool reference' }
+          dotnet restore $csproj
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned InnoSetup compiler package restore failed' }
+          $toolRoot = Join-Path $env:USERPROFILE '.nuget/packages/tools.innosetup/7.1.0'
+          if (-not (Test-Path $toolRoot)) { throw 'InnoSetup 7.1.0 package missing' }
+          $found = @(Get-ChildItem -Path $toolRoot -Filter ISCC.exe -Recurse -File)
+          if ($found.Count -ne 1) { throw "Expected one pinned ISCC.exe, found $($found.Count)" }
+          $iscc = $found[0].FullName
+          Write-Host "Using Inno Setup 7.1.0 compiler from pinned NuGet package: $iscc"
           & $iscc 'installer/VelomuxAvalonia.iss'
           if ($LASTEXITCODE -ne 0) { throw 'Avalonia installer compilation failed' }
       - name: Smoke-test actual install, bundled conversion and uninstall
