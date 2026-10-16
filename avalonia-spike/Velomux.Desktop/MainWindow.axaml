@@ -67,7 +67,7 @@
     </Style>
   </Window.Styles>
 
-  <Grid ColumnDefinitions="240,*">
+  <Grid ColumnDefinitions="220,*">
     <Border Grid.Column="0" Background="#101A2B" BorderBrush="#2A3A54"
             BorderThickness="0,0,1,0" Padding="20,25">
       <DockPanel LastChildFill="True">
@@ -131,17 +131,19 @@
         </Border>
       </Grid>
 
-      <Grid Grid.Row="1" ColumnDefinitions="*,410" ColumnSpacing="17">
-        <Border Grid.Column="0" Classes="card" Padding="18">
+      <Grid Grid.Row="1" ColumnDefinitions="*,380" ColumnSpacing="16">
+        <Border x:Name="QueuePanel" Grid.Column="0" Classes="card" Padding="18">
           <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="15">
-            <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+            <!-- Place queue counts on their own line, never in a competing
+                 right-hand Grid column that forces the settings off-screen. -->
+            <StackPanel Grid.Row="0" Spacing="10">
               <StackPanel Spacing="5">
                 <TextBlock Text="Conversion queue" FontSize="19" FontWeight="Bold"/>
                 <TextBlock Text="Inspect files before converting; originals stay untouched."
+                           TextWrapping="Wrap"
                            Foreground="#A2B7D1" FontSize="12"/>
               </StackPanel>
-              <StackPanel Grid.Column="1" Orientation="Horizontal"
-                          VerticalAlignment="Center" Spacing="12">
+              <StackPanel Orientation="Horizontal" Spacing="14">
                 <TextBlock Text="{Binding Queued, StringFormat='In queue  {0}'}"
                            FontSize="12" Foreground="#A99CFF" FontWeight="SemiBold"/>
                 <TextBlock Text="{Binding Completed, StringFormat='Completed  {0}'}"
@@ -149,7 +151,7 @@
                 <TextBlock Text="{Binding Failed, StringFormat='Failed  {0}'}"
                            FontSize="12" Foreground="#F99AB0" FontWeight="SemiBold"/>
               </StackPanel>
-            </Grid>
+            </StackPanel>
 
             <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="9">
               <Button Content="+ Add files" Classes="primary"
@@ -209,7 +211,8 @@
                   <Button Content="Choose media files" Classes="secondary"
                           HorizontalAlignment="Center" Click="AddFiles_Click"/>
                   <TextBlock Text="MP4 · MKV · MOV · WebM · MP3 · M4A · WAV · FLAC"
-                             TextAlignment="Center" Foreground="#8197B7" FontSize="11"/>
+                             TextAlignment="Center" TextWrapping="Wrap"
+                             Foreground="#8197B7" FontSize="11"/>
                 </StackPanel>
               </Grid>
             </Border>
@@ -225,7 +228,7 @@
           </Grid>
         </Border>
 
-        <Border Grid.Column="1" Classes="card">
+        <Border x:Name="SettingsPanel" Grid.Column="1" Classes="card">
           <!-- The settings workspace has ONE scroll region, not nested tabs. -->
           <ScrollViewer x:Name="SettingsViewport" VerticalScrollBarVisibility="Auto"
                         HorizontalScrollBarVisibility="Disabled">
