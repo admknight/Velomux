@@ -71,7 +71,7 @@
     <Border Grid.Column="0" Background="#101A2B" BorderBrush="#2A3A54"
             BorderThickness="0,0,1,0" Padding="20,25">
       <DockPanel LastChildFill="True">
-        <StackPanel DockPanel.Dock="Bottom" Spacing="9">
+        <StackPanel x:Name="CreatorCredits" DockPanel.Dock="Bottom" Spacing="9">
           <Border Height="1" Background="#2D405B"/>
           <TextBlock Text="PROJECT CREATOR &amp; LEAD MAINTAINER"
                      Classes="eyebrow" TextWrapping="Wrap" FontSize="10"/>
