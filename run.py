@@ -118,6 +118,27 @@ def gui_smoke_test() -> int:
         window.preset_search.setText('MP3')
         assert window.preset_list.count() >= 3, 'Preset library search did not find MP3 alternatives.'
         window.preset_search.clear()
+
+        # In the frozen EXE too, scrolling over a settings field must never
+        # silently change its value. The full parent-scroll test runs in pytest.
+        from PySide6.QtCore import QPoint, QPointF, Qt
+        from PySide6.QtGui import QWheelEvent
+        from PySide6.QtWidgets import QComboBox
+        for field in (window.audio_bitrate, window.sample_rate, window.gain,
+                      window.channels, window.collision, window.preset, window.mode,
+                      window.crf, window.video_fps, window.image_quality):
+            before = field.currentIndex() if isinstance(field, QComboBox) else field.value()
+            origin = QPoint(8, 8)
+            event = QWheelEvent(
+                QPointF(origin), QPointF(field.mapToGlobal(origin)),
+                QPoint(0, 0), QPoint(0, -120),
+                Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier,
+                Qt.ScrollPhase.ScrollUpdate, False
+            )
+            QApplication.sendEvent(field, event)
+            after = field.currentIndex() if isinstance(field, QComboBox) else field.value()
+            assert after == before, 'Mouse wheel modified a conversion setting.'
+
         for idx in range(window.pages.count()):
             window._change_page(idx)
             assert window.pages.currentIndex() == idx, f'Navigation failed: page {idx}'
