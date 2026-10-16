@@ -5,14 +5,17 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
-    <AssemblyName>Velomux.Avalonia.Spike</AssemblyName>
-    <Version>0.0.2</Version>
-    <!-- Avalonia/Skia native binaries must travel with the single-file EXE.
-         Without this property, an EXE run alone can fail before any window opens. -->
+    <AssemblyName>Velomux</AssemblyName>
+    <Version>0.4.0</Version>
+    <FileVersion>0.4.0.0</FileVersion>
+    <AssemblyVersion>0.4.0.0</AssemblyVersion>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <DebugType>embedded</DebugType>
     <Authors>Adam Knight</Authors>
-    <Description>Non-shipping Avalonia interface feasibility spike for Velomux</Description>
+    <Company>Adam Knight</Company>
+    <Product>Velomux</Product>
+    <Description>Velomux media workstation with native Avalonia UI and preserved conversion engine</Description>
+    <ApplicationIcon Condition="'$(OS)' == 'Windows_NT'">../../assets/velomux.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.4" />
