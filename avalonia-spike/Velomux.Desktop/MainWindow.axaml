@@ -174,7 +174,7 @@
               <Border Height="1" Background="#2A3B54"/>
               <TextBlock Text="OUTPUT DIRECTORY" Classes="eyebrow"/>
               <TextBox Text="{Binding OutputDirectory, Mode=TwoWay}"
-                       Watermark="Choose destination folder"/>
+                       PlaceholderText="Choose destination folder"/>
               <Button Content="Browse destination..." Classes="secondary"
                       HorizontalAlignment="Left" Click="ChooseFolder_Click"/>
               <TextBlock Text="OUTPUT SAFETY" Classes="eyebrow"/>
