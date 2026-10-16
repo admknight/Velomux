@@ -28,7 +28,7 @@ try {
         throw 'Velomux.exe was not found after installation.'
     }
     $env:QT_QPA_PLATFORM = 'offscreen'
-    foreach ($mode in @('--self-test', '--gui-smoke-test')) {
+    foreach ($mode in @('--self-test', '--gui-smoke-test', '--media-integration-test')) {
         Write-Host "Testing installed executable: $mode"
         $probe = Start-Process -FilePath $exe -ArgumentList $mode -PassThru -Wait
         if ($probe.ExitCode -ne 0) {
