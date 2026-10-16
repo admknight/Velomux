@@ -430,6 +430,15 @@ class MainWindow(QMainWindow):
         table.setMinimumHeight(170)
         self.table = table
         column.addWidget(table, 1)
+        error_row = hbox(10)
+        self.failure_banner = label('', 'ErrorBanner')
+        self.failure_banner.setWordWrap(True)
+        self.failure_banner.hide()
+        error_row.addWidget(self.failure_banner, 1)
+        self.error_log_button = button('View errors', lambda: self._change_page(1))
+        self.error_log_button.hide()
+        error_row.addWidget(self.error_log_button)
+        column.addLayout(error_row)
         totals = hbox(9)
         totals.addWidget(label('BATCH PROGRESS', 'Caption'))
         self.percent_label = label('0%', 'Caption')
@@ -678,7 +687,7 @@ class MainWindow(QMainWindow):
         w,l = self._tab_shell()
         self.image_width = self._group_input(l,'MAX WIDTH · PX',self._spin(0,32768,0,'Source'))
         self.image_height = self._group_input(l,'MAX HEIGHT · PX',self._spin(0,32768,0,'Source'))
-        self.image_quality = self._group_input(l,'QUALITY · 1–100',self._spin(1,100,90))
+        self.image_quality = self._group_input(l,'IMAGE QUALITY · PRESET OR 1–100',self._spin(0,100,0,'Preset default'))
         self.image_rotate = QComboBox()
         self.image_rotate.addItems(['0','90','180','270'])
         self._group_input(l,'ROTATE CLOCKWISE',self.image_rotate)
@@ -889,7 +898,8 @@ class MainWindow(QMainWindow):
         values=[e.source.name,classify(e.source).upper(),f'{size:,.1f} MB',PRESET_MAP[e.preset].ext.upper().lstrip('.'),e.state]
         for c,value in enumerate(values):
             item=QTableWidgetItem(value)
-            item.setToolTip(str(e.source))
+            note = (e.note or '').strip()
+            item.setToolTip(f'{e.source}\n{note}' if note else str(e.source))
             if c == 4:
                 item.setForeground(QBrush(QColor(MINT if e.state in ('Done','Skipped') else DANGER if e.state=='Failed' else AMBER if e.state=='Running' else MUTED)))
             self.table.setItem(index,c,item)
@@ -919,6 +929,8 @@ class MainWindow(QMainWindow):
         self.total_progress.setValue(0)
         self.percent_label.setText('0%')
         self._metrics()
+        self.failure_banner.hide()
+        self.error_log_button.hide()
         self.inspector.setPlainText('Select a file to see its codec, resolution, duration and tracks.')
 
     def show_selected_info(self):
@@ -928,6 +940,7 @@ class MainWindow(QMainWindow):
         try: info=describe(e.source)
         except Exception as exc: info=f'Unable to inspect media: {exc}'
         if e.output: info += '\nOutput: '+e.output
+        if e.note: info += '\n\nCONVERSION RESULT: ' + e.state.upper() + '\n' + e.note
         self.inspector.setPlainText(info)
 
     def apply_preset(self):
@@ -1028,7 +1041,10 @@ class MainWindow(QMainWindow):
             self._render_row(i)
             jobs.append((i,e.source,directory,e.preset,stem))
         self.total_progress.setValue(0)
+        self.total_progress.setStyleSheet('')
         self.percent_label.setText('0%')
+        self.failure_banner.hide()
+        self.error_log_button.hide()
         self._set_processing(True)
         self._metrics()
         self.worker=Worker(jobs,opt)
@@ -1065,6 +1081,15 @@ class MainWindow(QMainWindow):
         self._metrics()
         prefix = 'OK' if state == 'Done' else state.upper()
         self._add_log(f'[{prefix}] {e.source.name}: {detail}')
+        if state == 'Failed':
+            self.failure_banner.setText(
+                f'{sum(row.state == "Failed" for row in self.entries)} conversion(s) failed. '
+                'Select a failed row for its error, or open Activity for full diagnostics.'
+            )
+            self.failure_banner.show()
+            self.error_log_button.show()
+        elif self.inspector_dialog.isVisible():
+            self.show_selected_info()
         count=sum(row.state in ('Done','Skipped','Failed','Cancelled') for row in self.entries)
         value=100*count/max(1,len(self.entries))
         self.total_progress.setValue(int(value))
@@ -1075,6 +1100,21 @@ class MainWindow(QMainWindow):
         counts={name:sum(e.state==name for e in self.entries) for name in ('Done','Skipped','Failed','Cancelled')}
         summary=' · '.join(f'{name} {value}' for name,value in counts.items() if value)
         self.status.setText('Batch finished. '+summary)
+        failed = counts['Failed']
+        if failed:
+            self.total_progress.setStyleSheet(
+                'QProgressBar {background:#283047;border-radius:5px;border:none;}'
+                'QProgressBar::chunk {background:#FF7E9A;border-radius:5px;}'
+            )
+            self.failure_banner.setText(
+                f'{failed} conversion(s) failed. No original file was modified. '
+                'Open Activity for the exact error messages before trying again.'
+            )
+            self.failure_banner.show()
+            self.error_log_button.show()
+            self._change_page(0)
+        else:
+            self.total_progress.setStyleSheet('')
         self._add_log('Batch finished. '+summary)
 
     def _thread_finished(self):
