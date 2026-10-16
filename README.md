@@ -2,7 +2,7 @@
 
 **Convert your media, your way.**
 
-**Maintained by [Adam Knight](https://github.com/admknight) (@admknight).**
+**Project Creator & Lead Maintainer:** [Adam Knight](https://github.com/admknight) (@admknight).
 This independent, offline-first converter is under active development.
 
 ### VeloFlow — choose the task before the codec
