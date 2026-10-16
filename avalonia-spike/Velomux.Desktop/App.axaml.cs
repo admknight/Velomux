@@ -31,10 +31,24 @@ public partial class App : Application
                 {
                     Dispatcher.UIThread.Post(() =>
                     {
-                        bool visible = desktop.MainWindow?.IsVisible == true;
+                        bool healthy = desktop.MainWindow?.IsVisible == true;
+                        if (healthy && desktop.MainWindow is MainWindow window)
+                        {
+                            try
+                            {
+                                window.AssertInitialUiReady();
+                                StartupDiagnostics.Record(
+                                    "GUI_INITIAL_STATE: PASS (empty queue, selected M4A, settings layout)");
+                            }
+                            catch (Exception ex)
+                            {
+                                healthy = false;
+                                StartupDiagnostics.Record("GUI_INITIAL_STATE: FAIL " + ex);
+                            }
+                        }
                         StartupDiagnostics.Record(
-                            "DESKTOP_STARTUP_TEST: " + (visible ? "PASS" : "FAIL"));
-                        desktop.Shutdown(visible ? 0 : 51);
+                            "DESKTOP_STARTUP_TEST: " + (healthy ? "PASS" : "FAIL"));
+                        desktop.Shutdown(healthy ? 0 : 51);
                     }, DispatcherPriority.Background);
                 }
             };
