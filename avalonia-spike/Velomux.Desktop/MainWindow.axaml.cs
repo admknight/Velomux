@@ -20,13 +20,20 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = new MainViewModel();
-        SizeChanged += (_, _) => UpdateResponsiveShell();
+        SizeChanged += (_, _) =>
+        {
+            UpdateResponsiveShell();
+            Avalonia.Threading.Dispatcher.UIThread.Post(
+                UpdateWorkspaceHeight, Avalonia.Threading.DispatcherPriority.Background);
+        };
         // Prevent wheel-hover on closed format/profile dropdowns from changing
         // the selected encoding operation. Scroll the settings viewport instead.
         AddHandler(InputElement.PointerWheelChangedEvent, ProtectWheelSelection, RoutingStrategies.Tunnel);
         Opened += (_, _) =>
         {
             UpdateResponsiveShell();
+            UpdateLayout();
+            UpdateWorkspaceHeight();
             _catalogLoadTask ??= LoadCatalogSafeAsync();
         };
     }
@@ -76,9 +83,26 @@ public partial class MainWindow : Window
         if (activity != null) activity.IsVisible = Bounds.Height >= 790;
     }
 
+    private void UpdateWorkspaceHeight()
+    {
+        var columns = this.FindControl<Grid>("WorkspaceColumns");
+        var scroller = this.FindControl<ScrollViewer>("SettingsViewport");
+        if (columns == null || scroller == null || Bounds.Height <= 0) return;
+        var top = columns.TranslatePoint(new Point(0, 0), this);
+        if (top == null) return;
+        // Avalonia 12 ScrollViewer's natural desired size can force a Grid *
+        // row to expand beyond a small Windows desktop (1028x749 in CI).
+        // Constrain the real viewport, not its content, and retain one scrollbar.
+        double available = Math.Max(250, Bounds.Height - top.Value.Y - 18);
+        columns.Height = available;
+        scroller.Height = Math.Max(220, available - 2);
+    }
+
     internal void AssertInitialUiReady()
     {
         UpdateResponsiveShell();
+        UpdateLayout();
+        UpdateWorkspaceHeight();
         UpdateLayout();
         if (!Vm.IsCatalogLoaded || Vm.Tasks.Count != 7 ||
             Vm.Profiles.Count < 2 || Vm.VisiblePresets.Count != 51)
