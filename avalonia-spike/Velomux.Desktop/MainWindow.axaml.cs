@@ -1,8 +1,9 @@
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Media.Imaging;
-using Avalonia.Interactivity;
 using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Velomux.Desktop.Services;
 using Velomux.Desktop.ViewModels;
@@ -12,107 +13,116 @@ namespace Velomux.Desktop;
 public partial class MainWindow : Window
 {
     private CancellationTokenSource? _activeBatch;
+    private Task? _catalogLoadTask;
     private MainViewModel Vm => (MainViewModel)DataContext!;
-
-    // The published EXE must pass this against its REAL opened Avalonia window
-    // before GitHub publishes another evaluation artifact. Static XML checks
-    // do not establish that runtime styles and state bindings are functional.
-    internal void AssertInitialUiReady()
-    {
-        UpdateResponsiveShell();
-        UpdateLayout();
-
-        var empty = this.FindControl<StackPanel>("EmptyQueuePanel")
-                    ?? throw new InvalidOperationException("Empty queue panel is missing.");
-        var queued = this.FindControl<Grid>("QueueDataPanel")
-                     ?? throw new InvalidOperationException("Queue data panel is missing.");
-        var settings = this.FindControl<ScrollViewer>("SettingsViewport")
-                       ?? throw new InvalidOperationException("Settings viewport is missing.");
-        var m4a = this.FindControl<Button>("M4aFormatButton")
-                  ?? throw new InvalidOperationException("M4A choice is missing.");
-        var mp3 = this.FindControl<Button>("Mp3FormatButton")
-                  ?? throw new InvalidOperationException("MP3 choice is missing.");
-        if (!Vm.IsQueueEmpty || !empty.IsVisible || queued.IsVisible)
-            throw new InvalidOperationException("Empty queue view is not correctly displayed.");
-        if (!Vm.IsM4a || Vm.IsMp3 || !m4a.Classes.Contains("active")
-            || mp3.Classes.Contains("active"))
-            throw new InvalidOperationException("M4A/MP3 selected-format visual state is incorrect.");
-        if (settings.Bounds.Width <= 0 || settings.Bounds.Height <= 0)
-            throw new InvalidOperationException("Settings panel has no rendered layout dimensions.");
-
-        // The previous layout passed compilation but its queue header forced
-        // the entire right-hand settings panel off-screen at 1040px.
-        // Check real, translated render bounds, not only XAML validity.
-        foreach (var name in new[] { "QueuePanel", "SettingsPanel", "CreatorCredits" })
-        {
-            var panel = this.FindControl<Control>(name)
-                        ?? throw new InvalidOperationException($"Missing layout element {name}.");
-            if (!panel.IsVisible) continue; // Creator credits live in the compact header when narrow.
-            var bottomRight = panel.TranslatePoint(
-                new Point(panel.Bounds.Width, panel.Bounds.Height), this);
-            if (bottomRight is null)
-                throw new InvalidOperationException($"Cannot locate {name} on the window.");
-            if (bottomRight.Value.X > Bounds.Width + 1 ||
-                bottomRight.Value.Y > Bounds.Height + 1)
-                throw new InvalidOperationException(
-                    $"Layout overflow: {name} ends at {bottomRight.Value} " +
-                    $"outside the visible {Bounds.Width}x{Bounds.Height} window.");
-        }
-        var nav = this.FindControl<Border>("NavSidebar")
-                  ?? throw new InvalidOperationException("Navigation sidebar is missing.");
-        var smallCredit = this.FindControl<TextBlock>("CompactCreator")
-                          ?? throw new InvalidOperationException("Compact creator credit is missing.");
-        if (Bounds.Width < 1250 && (nav.IsVisible || !smallCredit.IsVisible))
-            throw new InvalidOperationException(
-                "Compact mode did not reclaim the sidebar width or preserve author credit.");
-        if (Bounds.Width >= 1250 && (!nav.IsVisible || smallCredit.IsVisible))
-            throw new InvalidOperationException("Full-width sidebar mode is incorrect.");
-
-        // Cancelling a file dialog must not change the initial ready status.
-        string originalStatus = Vm.Status;
-        Vm.AddFiles(Array.Empty<string>());
-        if (Vm.Status != originalStatus)
-            throw new InvalidOperationException("Empty file picker incorrectly changed status.");
-    }
 
     public MainWindow()
     {
         InitializeComponent();
         DataContext = new MainViewModel();
         SizeChanged += (_, _) => UpdateResponsiveShell();
+        Opened += (_, _) =>
+        {
+            UpdateResponsiveShell();
+            _catalogLoadTask ??= LoadCatalogSafeAsync();
+        };
+    }
+
+    private async Task LoadCatalogSafeAsync()
+    {
+        try
+        {
+            CatalogOption catalog = await MediaEngineBridge.LoadCatalogAsync();
+            Vm.SetCatalog(catalog);
+            var launchFiles = Environment.GetCommandLineArgs().Skip(1)
+                .Where(arg => !arg.StartsWith("--", StringComparison.Ordinal)).ToList();
+            if (launchFiles.Count > 0) Vm.AddFiles(launchFiles);
+            Vm.AddActivity("Native Avalonia workstation ready.");
+        }
+        catch (Exception ex)
+        {
+            Vm.AddActivity("MEDIA ENGINE UNAVAILABLE: " + ex.Message);
+        }
+    }
+
+    internal async Task EnsureCatalogLoadedAsync()
+    {
+        _catalogLoadTask ??= LoadCatalogSafeAsync();
+        await _catalogLoadTask;
+        if (!Vm.IsCatalogLoaded)
+            throw new InvalidOperationException("Frozen Velomux backend did not provide its 51-preset catalog.");
     }
 
     private void UpdateResponsiveShell()
     {
-        // Keep two fully usable columns instead of shrinking buttons/fonts
-        // until unreadable. The single pilot workflow needs no permanent
-        // sidebar on screens below 1250 logical pixels.
-        bool compact = Bounds.Width < 1250;
+        bool compact = Bounds.Width < 1260;
         var shell = this.FindControl<Grid>("AppShell");
         var sidebar = this.FindControl<Border>("NavSidebar");
         var credit = this.FindControl<TextBlock>("CompactCreator");
-        if (shell is null || sidebar is null || credit is null) return;
+        var navigation = this.FindControl<WrapPanel>("CompactTaskBar");
+        if (shell == null || sidebar == null || credit == null || navigation == null) return;
         sidebar.IsVisible = !compact;
-        shell.ColumnDefinitions[0].Width = new GridLength(
-            compact ? 0 : 220, GridUnitType.Pixel);
+        shell.ColumnDefinitions[0].Width = new GridLength(compact ? 0 : 218);
         credit.IsVisible = compact;
+        navigation.IsVisible = compact;
+    }
+
+    internal void AssertInitialUiReady()
+    {
+        UpdateResponsiveShell();
+        UpdateLayout();
+        if (!Vm.IsCatalogLoaded || Vm.Tasks.Count != 7 ||
+            Vm.Profiles.Count < 2 || Vm.VisiblePresets.Count != 51)
+            throw new InvalidOperationException("Task and preset controls are not populated.");
+        if (!Vm.IsQueueEmpty)
+            throw new InvalidOperationException("Initial queue must be empty for GUI startup QA.");
+        var empty = this.FindControl<StackPanel>("EmptyQueuePanel")
+                    ?? throw new InvalidOperationException("Missing empty-queue state.");
+        var queue = this.FindControl<Grid>("QueueDataPanel")
+                    ?? throw new InvalidOperationException("Missing file queue.");
+        var settings = this.FindControl<ScrollViewer>("SettingsViewport")
+                    ?? throw new InvalidOperationException("Missing settings viewport.");
+        if (!empty.IsVisible || queue.IsVisible || settings.Bounds.Height <= 0)
+            throw new InvalidOperationException("Initial Avalonia layout is inconsistent.");
+        foreach (var key in new[] { "QueuePanel", "SettingsPanel" })
+        {
+            var panel = this.FindControl<Control>(key)
+                ?? throw new InvalidOperationException("Missing panel: " + key);
+            var bottomRight = panel.TranslatePoint(
+                new Point(panel.Bounds.Width, panel.Bounds.Height), this);
+            if (bottomRight == null || bottomRight.Value.X > Bounds.Width + 1
+                || bottomRight.Value.Y > Bounds.Height + 1)
+                throw new InvalidOperationException("Off-screen panel detected: " + key);
+        }
+        var sidebar = this.FindControl<Border>("NavSidebar")!;
+        var bar = this.FindControl<WrapPanel>("CompactTaskBar")!;
+        if (Bounds.Width < 1260 ? (sidebar.IsVisible || !bar.IsVisible)
+                                : (!sidebar.IsVisible || bar.IsVisible))
+            throw new InvalidOperationException("Responsive navigation layout mismatch.");
     }
 
     internal void SaveStartupUiSnapshot()
     {
         var dir = Path.Combine(AppContext.BaseDirectory, "ui-qa");
         Directory.CreateDirectory(dir);
-        int width = Math.Max(1, (int)Math.Ceiling(Bounds.Width));
-        int height = Math.Max(1, (int)Math.Ceiling(Bounds.Height));
-        string filename = Path.Combine(dir, "Avalonia-Windows-Startup.png");
-        using var snapshot = new RenderTargetBitmap(new PixelSize(width, height));
-        snapshot.Render(this);
-        snapshot.Save(filename, PngBitmapEncoderOptions.Default);
-        if (!File.Exists(filename) || new FileInfo(filename).Length < 5000)
-            throw new IOException("The opened Avalonia window was not captured into a valid PNG.");
-        Services.StartupDiagnostics.Record(
-            $"GUI_SCREENSHOT: {filename} ({width}x{height}).");
+        var size = new PixelSize(
+            Math.Max(1, (int)Math.Ceiling(Bounds.Width)),
+            Math.Max(1, (int)Math.Ceiling(Bounds.Height)));
+        string path = Path.Combine(dir, "Avalonia-Windows-Startup.png");
+        using var bitmap = new RenderTargetBitmap(size);
+        bitmap.Render(this);
+        bitmap.Save(path, PngBitmapEncoderOptions.Default);
+        if (!File.Exists(path) || new FileInfo(path).Length < 5000)
+            throw new IOException("The full-workstation screenshot was not captured.");
+        StartupDiagnostics.Record($"GUI_SCREENSHOT: {path} ({size.Width}x{size.Height}).");
     }
+
+    private void ChooseTask_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button button && button.Tag is string id) Vm.ChooseTask(id);
+    }
+    private void QuickMode_Click(object? sender, RoutedEventArgs e) => Vm.QuickMode = true;
+    private void AdvancedMode_Click(object? sender, RoutedEventArgs e) => Vm.QuickMode = false;
 
     private async void AddFiles_Click(object? sender, RoutedEventArgs e)
     {
@@ -121,46 +131,75 @@ public partial class MainWindow : Window
         {
             var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
-                Title = "Select media containing audio",
-                AllowMultiple = true,
+                Title = "Select video, audio or image files",
+                AllowMultiple = true
             });
             Vm.AddFiles(files.Select(x => x.TryGetLocalPath())
-                             .Where(x => !string.IsNullOrWhiteSpace(x))
-                             .Select(x => x!));
+                .Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x!));
         }
-        catch (Exception ex)
+        catch (Exception ex) { Vm.AddActivity("File selection failed: " + ex.Message); }
+    }
+    private async void AddFolder_Click(object? sender, RoutedEventArgs e)
+    {
+        if (Vm.IsRunning) return;
+        try
         {
-            Vm.Status = "File selection failed: " + ex.Message;
+            var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+            {
+                Title = "Import media directory",
+                AllowMultiple = false
+            });
+            var root = folders.FirstOrDefault()?.TryGetLocalPath();
+            if (!string.IsNullOrWhiteSpace(root))
+            {
+                var files = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories);
+                Vm.AddFiles(files, Path.GetFullPath(root));
+            }
         }
+        catch (Exception ex) { Vm.AddActivity("Folder import failed: " + ex.Message); }
     }
 
     private void Media_DragOver(object? sender, DragEventArgs e)
     {
         e.DragEffects = !Vm.IsRunning && e.DataTransfer.Contains(DataFormat.File)
-            ? DragDropEffects.Copy
-            : DragDropEffects.None;
+            ? DragDropEffects.Copy : DragDropEffects.None;
         e.Handled = true;
     }
-
     private void Media_Drop(object? sender, DragEventArgs e)
     {
         if (Vm.IsRunning) return;
-        var paths = e.DataTransfer.TryGetFiles()?.OfType<IStorageFile>()
-            .Select(file => file.TryGetLocalPath())
-            .Where(path => !string.IsNullOrWhiteSpace(path))
-            .Select(path => path!);
-        if (paths is not null) Vm.AddFiles(paths);
+        var files = e.DataTransfer.TryGetFiles();
+        if (files != null)
+        {
+            foreach (var item in files)
+            {
+                if (item is IStorageFolder folder)
+                {
+                    var root = folder.TryGetLocalPath();
+                    if (!string.IsNullOrWhiteSpace(root))
+                    {
+                        try { Vm.AddFiles(Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories), root); }
+                        catch (Exception ex) { Vm.AddActivity("Folder drop error: " + ex.Message); }
+                    }
+                }
+                else if (item is IStorageFile file)
+                {
+                    var path = file.TryGetLocalPath();
+                    if (!string.IsNullOrWhiteSpace(path)) Vm.AddFiles(new[] { path });
+                }
+            }
+        }
         e.Handled = true;
     }
-
     private void RemoveSelected_Click(object? sender, RoutedEventArgs e) => Vm.RemoveSelected();
+    private void ClearCompleted_Click(object? sender, RoutedEventArgs e) => Vm.ClearCompleted();
 
-    private void M4a_Click(object? sender, RoutedEventArgs e) =>
-        Vm.Format = AudioOutputFormat.M4a;
-
-    private void Mp3_Click(object? sender, RoutedEventArgs e) =>
-        Vm.Format = AudioOutputFormat.Mp3;
-
+    private async void Inspect_Click(object? sender, RoutedEventArgs e)
+    {
+        if (Vm.SelectedJob is not MediaJob selected) return;
+        try { Vm.MediaInfo = await MediaEngineBridge.DescribeAsync(selected.Path); }
+        catch (Exception ex) { Vm.MediaInfo = "Unable to inspect: " + ex.Message; }
+    }
     private async void ChooseFolder_Click(object? sender, RoutedEventArgs e)
     {
         if (Vm.IsRunning) return;
@@ -168,83 +207,152 @@ public partial class MainWindow : Window
         {
             var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
             {
-                Title = "Choose output directory",
-                AllowMultiple = false,
+                Title = "Choose where outputs are saved",
+                AllowMultiple = false
             });
-            var selected = folders.FirstOrDefault()?.TryGetLocalPath();
-            if (!string.IsNullOrWhiteSpace(selected)) Vm.OutputDirectory = selected;
+            var path = folders.FirstOrDefault()?.TryGetLocalPath();
+            if (!string.IsNullOrWhiteSpace(path)) Vm.OutputDirectory = path;
         }
-        catch (Exception ex)
-        {
-            Vm.Status = "Destination selection failed: " + ex.Message;
-        }
+        catch (Exception ex) { Vm.AddActivity("Destination picker failed: " + ex.Message); }
+    }
+
+    private static double ParseNumber(string value, string label, double minimum, double maximum)
+    {
+        if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double result)
+            || !double.IsFinite(result) || result < minimum || result > maximum)
+            throw new ArgumentException($"{label} must be a number between {minimum} and {maximum}.");
+        return result;
+    }
+
+    private static string DestinationFor(MediaJob job, string baseDirectory, bool preserve)
+    {
+        if (!preserve || job.ImportRoot == null) return baseDirectory;
+        string relative = Path.GetRelativePath(job.ImportRoot, job.Path);
+        if (Path.IsPathRooted(relative) || relative == ".." ||
+            relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            return baseDirectory;
+        string? folder = Path.GetDirectoryName(relative);
+        return string.IsNullOrEmpty(folder) ? baseDirectory : Path.Combine(baseDirectory, folder);
     }
 
     private async void Convert_Click(object? sender, RoutedEventArgs e)
     {
-        if (Vm.IsRunning || !Vm.Jobs.Any(j => j.Status != "Completed")) return;
-        var folder = Vm.OutputDirectory.Trim();
-        if (folder.Length == 0)
+        if (!Vm.CanStart) return;
+        string preset = Vm.SelectedPresetName;
+        if (string.IsNullOrWhiteSpace(preset))
         {
-            Vm.Status = "Please select a destination folder.";
+            Vm.AddActivity("Select a conversion profile or advanced encoder preset.");
             return;
         }
+        if (string.IsNullOrWhiteSpace(Vm.OutputDirectory))
+        {
+            Vm.AddActivity("Select an output destination.");
+            return;
+        }
+        string directory;
+        Dictionary<string, object> options;
+        try
+        {
+            directory = Path.GetFullPath(Vm.OutputDirectory.Trim());
+            double start = ParseNumber(Vm.TrimStart, "Trim start", 0, 1000000);
+            double end = ParseNumber(Vm.TrimEnd, "Trim end", 0, 1000000);
+            double speed = ParseNumber(Vm.Speed, "Playback speed", 0.1, 8);
+            int quality = (int)ParseNumber(Vm.Quality, "Video CRF", 0, 51);
+            int imageQuality = (int)ParseNumber(Vm.ImageQuality, "Image quality", 1, 100);
+            if (end != 0 && end <= start)
+                throw new ArgumentException("Trim end must be greater than trim start.");
+            if (Vm.QuickMode && Vm.SelectedTask?.Id == "trim" && end == 0 && start == 0)
+                throw new ArgumentException("Choose a trim start or end time before running Trim.");
+            if (Vm.Collision == "repair" && (start != 0 || end != 0 || speed != 1))
+                throw new ArgumentException("Repair cannot verify previous output settings after a trim or speed change; choose Rename.");
+            options = new()
+            {
+                ["collision"] = Vm.Collision,
+                ["trim_start"] = start,
+                ["trim_end"] = end,
+                ["media_speed"] = speed,
+                ["quality"] = quality,
+                ["image_quality"] = imageQuality,
+                ["audio_normalize"] = Vm.Normalize,
+                ["decode_check"] = Vm.FullDecode,
+            };
+        }
+        catch (Exception ex) { Vm.AddActivity("Invalid conversion settings: " + ex.Message); return; }
 
+        bool preserve = Vm.PreserveFolders;
+        bool quick = Vm.QuickMode;
+        var task = Vm.SelectedTask;
+        var advanced = Vm.SelectedPreset;
         _activeBatch = new CancellationTokenSource();
+        var cancellation = _activeBatch;
         Vm.IsRunning = true;
-        var format = Vm.Format;
+        Vm.AddActivity("Started batch · " + preset);
         try
         {
             foreach (var job in Vm.Jobs.ToList())
             {
-                _activeBatch.Token.ThrowIfCancellationRequested();
+                if (cancellation.IsCancellationRequested) break;
                 if (job.Status == "Completed") continue;
-
+                bool compatible = quick
+                    ? task?.InputKinds.Contains(Vm.Classify(job.Path)) == true
+                    : advanced?.Group == "audio"
+                        ? Vm.Classify(job.Path) is "audio" or "video"
+                        : advanced?.Group == Vm.Classify(job.Path);
+                if (!compatible)
+                {
+                    job.Status = "Failed";
+                    job.Detail = "Selected task and input type are incompatible.";
+                    Vm.AddActivity("Incompatible input: " + job.FileName);
+                    Vm.RefreshQueue();
+                    continue;
+                }
                 job.Status = "Processing";
-                job.Detail = "FFmpeg audio extraction in progress";
-                Vm.Status = "Processing: " + job.FileName;
+                job.Progress = 0;
+                job.Detail = "Starting validated conversion...";
+                Vm.RefreshQueue();
                 try
                 {
-                    string saved = await AudioConversionService.ExtractAsync(
-                        job.Path, folder, format, _activeBatch.Token);
-                    job.Status = "Completed";
-                    job.Detail = saved;
-                    Vm.Status = "Saved: " + saved;
-                }
-                catch (OperationCanceledException)
-                {
-                    job.Status = "Cancelled";
-                    job.Detail = "User cancelled. No partial file was published.";
-                    Vm.Status = "Cancelled. Originals are unchanged.";
-                    break;
+                    var progress = new Progress<EngineProgress>(value =>
+                    {
+                        job.Progress = value.Percent;
+                        job.Detail = value.Detail;
+                    });
+                    var result = await MediaEngineBridge.ConvertAsync(
+                        job.Path, DestinationFor(job, directory, preserve),
+                        preset, options, progress, cancellation.Token);
+                    job.Status = result.Status switch
+                    {
+                        "done" => "Completed",
+                        "skipped" => "Skipped",
+                        "cancelled" => "Cancelled",
+                        _ => "Failed"
+                    };
+                    job.Progress = job.Status == "Completed" ? 100 : job.Progress;
+                    job.Detail = result.Output.Length > 0 ? result.Output : result.Detail;
+                    Vm.AddActivity($"{job.Status}: {job.FileName}" +
+                        (result.Status == "failed" ? " — " + result.Detail : ""));
                 }
                 catch (Exception ex)
                 {
-                    job.Status = "Failed";
-                    job.Detail = ex.GetType().Name + ": " + ex.Message;
-                    Vm.Status = "Failed: " + job.FileName + " — " + ex.Message;
+                    job.Status = cancellation.IsCancellationRequested ? "Cancelled" : "Failed";
+                    job.Detail = ex.Message;
+                    Vm.AddActivity($"{job.Status}: {job.FileName} — {ex.Message}");
                 }
-                finally
-                {
-                    Vm.NotifyFinished();
-                }
+                finally { Vm.RefreshQueue(); }
             }
-        }
-        catch (OperationCanceledException)
-        {
-            Vm.Status = "Batch cancelled. Originals are unchanged.";
+            if (cancellation.IsCancellationRequested)
+                Vm.AddActivity("Batch cancelled. Existing outputs and source files were not overwritten by a cancelled job.");
         }
         finally
         {
             Vm.IsRunning = false;
-            _activeBatch.Dispose();
+            cancellation.Dispose();
             _activeBatch = null;
-            Vm.NotifyFinished();
+            Vm.RefreshQueue();
         }
     }
 
     private void Cancel_Click(object? sender, RoutedEventArgs e) => _activeBatch?.Cancel();
-
     protected override void OnClosed(EventArgs e)
     {
         _activeBatch?.Cancel();
