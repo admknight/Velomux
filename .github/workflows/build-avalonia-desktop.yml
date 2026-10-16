@@ -115,6 +115,34 @@ jobs:
           if (-not (Test-Path $log) -or (Get-Content $log -Raw) -notmatch 'DESKTOP_STARTUP_TEST: PASS') { throw 'No runtime evidence of an opened, full-preset Avalonia window' }
           $png = Join-Path $PWD 'avalonia-spike/publish/ui-qa/Avalonia-Windows-Startup.png'
           if (-not (Test-Path $png) -or (Get-Item $png).Length -lt 5000) { throw 'Real rendered full-workstation screenshot missing' }
+      - name: Assemble and checksum ready-to-run Avalonia Windows portable build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = Join-Path $PWD 'avalonia-spike/portable-output'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $zip = Join-Path $out 'Velomux-Avalonia-Portable-0.4.0-Win-x64.zip'
+          Compress-Archive -Path 'avalonia-spike/publish/*' -DestinationPath $zip -CompressionLevel Optimal -Force
+          if (-not (Test-Path $zip) -or (Get-Item $zip).Length -lt 1000000) {
+            throw 'Portable artifact archive missing or unexpectedly small'
+          }
+          $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $([IO.Path]::GetFileName($zip))" | Set-Content (Join-Path $out 'SHA256SUMS.txt')
+          @(
+            "GitHub run: $env:GITHUB_RUN_ID"
+            "Source SHA: $env:GITHUB_SHA"
+            "Native Avalonia 12 / .NET 10, with bundled frozen Velomux engine and ffmpeg/ffprobe"
+            "Frozen engine real conversion test: passed"
+            "Published Windows GUI catalog and visibility/rendering QA: passed"
+            "Portable evaluation release, not independently verified against the user's original media files."
+          ) | Set-Content (Join-Path $out 'BUILD_PROVENANCE.txt')
+      - name: Upload independent Windows portable build (not dependent on installer)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Velomux-Avalonia-0.4.0-Windows-x64-PORTABLE
+          path: avalonia-spike/portable-output/
+          retention-days: 14
+          if-no-files-found: error
       - name: Install official signed Inno Setup compiler
         shell: pwsh
         run: |
