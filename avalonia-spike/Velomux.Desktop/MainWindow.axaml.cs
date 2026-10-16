@@ -19,6 +19,9 @@ public partial class MainWindow : Window
     // do not establish that runtime styles and state bindings are functional.
     internal void AssertInitialUiReady()
     {
+        UpdateResponsiveShell();
+        UpdateLayout();
+
         var empty = this.FindControl<StackPanel>("EmptyQueuePanel")
                     ?? throw new InvalidOperationException("Empty queue panel is missing.");
         var queued = this.FindControl<Grid>("QueueDataPanel")
@@ -44,6 +47,7 @@ public partial class MainWindow : Window
         {
             var panel = this.FindControl<Control>(name)
                         ?? throw new InvalidOperationException($"Missing layout element {name}.");
+            if (!panel.IsVisible) continue; // Creator credits live in the compact header when narrow.
             var bottomRight = panel.TranslatePoint(
                 new Point(panel.Bounds.Width, panel.Bounds.Height), this);
             if (bottomRight is null)
@@ -54,6 +58,16 @@ public partial class MainWindow : Window
                     $"Layout overflow: {name} ends at {bottomRight.Value} " +
                     $"outside the visible {Bounds.Width}x{Bounds.Height} window.");
         }
+        var nav = this.FindControl<Border>("NavSidebar")
+                  ?? throw new InvalidOperationException("Navigation sidebar is missing.");
+        var smallCredit = this.FindControl<TextBlock>("CompactCreator")
+                          ?? throw new InvalidOperationException("Compact creator credit is missing.");
+        if (Bounds.Width < 1250 && (nav.IsVisible || !smallCredit.IsVisible))
+            throw new InvalidOperationException(
+                "Compact mode did not reclaim the sidebar width or preserve author credit.");
+        if (Bounds.Width >= 1250 && (!nav.IsVisible || smallCredit.IsVisible))
+            throw new InvalidOperationException("Full-width sidebar mode is incorrect.");
+
         // Cancelling a file dialog must not change the initial ready status.
         string originalStatus = Vm.Status;
         Vm.AddFiles(Array.Empty<string>());
@@ -65,6 +79,23 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = new MainViewModel();
+        SizeChanged += (_, _) => UpdateResponsiveShell();
+    }
+
+    private void UpdateResponsiveShell()
+    {
+        // Keep two fully usable columns instead of shrinking buttons/fonts
+        // until unreadable. The single pilot workflow needs no permanent
+        // sidebar on screens below 1250 logical pixels.
+        bool compact = Bounds.Width < 1250;
+        var shell = this.FindControl<Grid>("AppShell");
+        var sidebar = this.FindControl<Border>("NavSidebar");
+        var credit = this.FindControl<TextBlock>("CompactCreator");
+        if (shell is null || sidebar is null || credit is null) return;
+        sidebar.IsVisible = !compact;
+        shell.ColumnDefinitions[0].Width = new GridLength(
+            compact ? 0 : 220, GridUnitType.Pixel);
+        credit.IsVisible = compact;
     }
 
     internal void SaveStartupUiSnapshot()
