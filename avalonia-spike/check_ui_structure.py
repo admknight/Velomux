@@ -12,7 +12,7 @@ assert "ListBox" in elements, "The user needs a real selectable file queue."
 engine = (folder / "Velomux.Desktop" / "Services" /
           "AudioConversionService.cs").read_text(encoding="utf-8")
 for token in ("ArgumentList.Add", "File.Move(staged, output, overwrite: false)",
-              "WaitForExitAsync", "VerifyAudioAsync", "Kill(entireProcessTree: true)"):
+              "WaitForExitAsync", "JsonDocument.Parse", "Kill(entireProcessTree: true)"):
     assert token in engine, f"Missing media safety contract: {token}"
 assert "UseShellExecute = false" in engine
 print("PASS: one settings scroll, zero tabs/spinners, staged FFmpeg extraction.")
