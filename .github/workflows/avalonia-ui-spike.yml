@@ -65,9 +65,11 @@ jobs:
             throw 'The executable exited without proving MainWindow.Opened and IsVisible=true.'
           }
           Write-Host 'PASS: actual Windows published executable created a visible Avalonia main window.'
-      - name: Include optional Windows diagnostic launcher
+      - name: Include Windows startup diagnostics and software fallback
         shell: pwsh
-        run: Copy-Item -LiteralPath 'avalonia-spike/Run-Velomux-Diagnostics.cmd' -Destination 'avalonia-spike/publish/Run-Velomux-Diagnostics.cmd'
+        run: |
+          Copy-Item -LiteralPath 'avalonia-spike/Run-Velomux-Diagnostics.cmd' -Destination 'avalonia-spike/publish/Run-Velomux-Diagnostics.cmd'
+          Copy-Item -LiteralPath 'avalonia-spike/Run-Velomux-Software-Rendering.cmd' -Destination 'avalonia-spike/publish/Run-Velomux-Software-Rendering.cmd'
       - uses: actions/upload-artifact@v4
         with:
           name: Velomux-Avalonia-UI-SPIKE-NOT-FOR-RELEASE
