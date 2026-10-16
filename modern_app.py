@@ -974,7 +974,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(card(overview, 'Panel', 18))
 
         people = vbox(9)
-        people.addWidget(label(PROJECT_CREATOR_ROLE.upper(), 'Caption'))
+        people.addWidget(label(PROJECT_CREATOR_ROLE, 'Caption'))
         people.addWidget(label(f'{PROJECT_CREATOR_NAME} ({PROJECT_CREATOR_HANDLE})', 'Section'))
         people.addWidget(label(
             'Source, issue tracking and development builds are managed through '
