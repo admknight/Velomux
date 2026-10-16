@@ -1,0 +1,188 @@
+name: Build native Avalonia Windows workstation
+
+on:
+  push:
+    branches: [feature/avalonia-desktop]
+    paths:
+      - "avalonia-spike/**"
+      - "engine.py"
+      - "toolchain.py"
+      - "velomux_flows.py"
+      - "installer/VelomuxAvalonia.iss"
+      - ".github/workflows/build-avalonia-desktop.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-candidate:
+    runs-on: windows-2022
+    timeout-minutes: 85
+    steps:
+      - name: Checkout exact source revision
+        uses: actions/checkout@v4
+      - name: Install Python for backend BUILD only
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: "x64"
+      - name: Install .NET 10 LTS SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Fetch known SHA-256 verified FFmpeg and ffprobe
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-05-13-07/ffmpeg-n9.0.2-22-g46d8f462ee-win64-gpl-9.0.zip'
+          $expected = '1385d57bd30c009fca25655f056680317dc9db3724cf082443bf8830223877cf'
+          $archive = Join-Path $env:RUNNER_TEMP 'velomux-ffmpeg-pinned.zip'
+          $folder = Join-Path $env:RUNNER_TEMP 'velomux-ffmpeg-pinned'
+          Invoke-WebRequest -Uri $url -OutFile $archive
+          $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "FFmpeg SHA-256 mismatch: $actual" }
+          Expand-Archive -LiteralPath $archive -DestinationPath $folder -Force
+          $found = @(Get-ChildItem -Path $folder -Filter ffmpeg.exe -File -Recurse)
+          if ($found.Count -ne 1) { throw "Expected one FFmpeg executable. Found $($found.Count)" }
+          $probe = Join-Path $found[0].DirectoryName 'ffprobe.exe'
+          if (-not (Test-Path $probe)) { throw 'Missing peer ffprobe.exe' }
+          & $found[0].FullName -version | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'FFmpeg did not execute' }
+          & $probe -version | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'ffprobe did not execute' }
+          "FFMPEG_BIN_DIR=$($found[0].DirectoryName)" >> $env:GITHUB_ENV
+          $found[0].DirectoryName >> $env:GITHUB_PATH
+      - name: Install backend dependencies and source validate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m pip install --disable-pip-version-check "pyinstaller==6.16.0" "pillow==11.3.0"
+          if ($LASTEXITCODE -ne 0) { throw 'Python dependencies failed' }
+          python avalonia-spike/check_ui_structure.py
+          if ($LASTEXITCODE -ne 0) { throw 'UI source structural test failed' }
+          python avalonia-spike/media_bridge.py --integration-test
+          if ($LASTEXITCODE -ne 0) { throw 'Seven-workflow source media test failed' }
+      - name: Build dedicated frozen Python media engine (no Qt dependency)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ff = Join-Path $env:FFMPEG_BIN_DIR 'ffmpeg.exe'
+          $fp = Join-Path $env:FFMPEG_BIN_DIR 'ffprobe.exe'
+          python -m PyInstaller --noconfirm --clean --onedir --console --name Velomux.Engine --distpath avalonia-spike/build-backend --workpath avalonia-spike/pyi-work --specpath avalonia-spike --paths . --add-binary "$ff;vendor/ffmpeg/bin" --add-binary "$fp;vendor/ffmpeg/bin" avalonia-spike/media_bridge.py
+          if ($LASTEXITCODE -ne 0) { throw 'Frozen media backend build failed' }
+          $backend = Join-Path $PWD 'avalonia-spike/build-backend/Velomux.Engine/Velomux.Engine.exe'
+          if (-not (Test-Path -LiteralPath $backend)) { throw 'Frozen backend executable missing' }
+          & $backend --integration-test
+          if ($LASTEXITCODE -ne 0) { throw 'Frozen engine real conversion regression failed' }
+      - name: Compile and publish self-contained Avalonia Windows executable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet restore avalonia-spike/Velomux.Desktop/Velomux.Desktop.csproj
+          if ($LASTEXITCODE -ne 0) { throw 'Avalonia restore failed' }
+          dotnet build avalonia-spike/Velomux.Desktop/Velomux.Desktop.csproj -c Release --no-restore -warnaserror
+          if ($LASTEXITCODE -ne 0) { throw 'Avalonia C# compile failed' }
+          dotnet publish avalonia-spike/Velomux.Desktop/Velomux.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false -p:IncludeNativeLibrariesForSelfExtract=true -o avalonia-spike/publish
+          if ($LASTEXITCODE -ne 0) { throw 'Avalonia Windows publish failed' }
+          $exe = Join-Path $PWD 'avalonia-spike/publish/Velomux.exe'
+          if (-not (Test-Path -LiteralPath $exe)) { throw 'Published Velomux.exe missing' }
+          $backendFolder = Join-Path $PWD 'avalonia-spike/publish/backend/Velomux.Engine'
+          New-Item -ItemType Directory -Force -Path $backendFolder | Out-Null
+          Copy-Item -Path 'avalonia-spike/build-backend/Velomux.Engine/*' -Destination $backendFolder -Recurse -Force
+          if (-not (Test-Path (Join-Path $backendFolder 'Velomux.Engine.exe'))) { throw 'Bundled Python conversion engine missing after packaging' }
+          Copy-Item -LiteralPath 'avalonia-spike/Run-Velomux-Diagnostics.cmd' -Destination 'avalonia-spike/publish/Run-Velomux-Diagnostics.cmd' -Force
+          Copy-Item -LiteralPath 'avalonia-spike/Run-Velomux-Software-Rendering.cmd' -Destination 'avalonia-spike/publish/Run-Velomux-Software-Rendering.cmd' -Force
+      - name: Test PUBLISHED native UI, populated catalog and window render
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path $PWD 'avalonia-spike/publish/Velomux.exe'
+          $process = Start-Process -FilePath $exe -ArgumentList '--desktop-startup-test' -PassThru
+          if (-not $process.WaitForExit(60000)) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            throw 'Published Avalonia UI failed to open within 60 seconds'
+          }
+          $process.Refresh()
+          $log = Join-Path $env:LOCALAPPDATA 'Velomux/Logs/avalonia-startup.log'
+          if (Test-Path $log) { Get-Content $log }
+          if ($process.ExitCode -ne 0) { throw "Published GUI startup test failed with exit $($process.ExitCode)" }
+          if (-not (Test-Path $log) -or (Get-Content $log -Raw) -notmatch 'DESKTOP_STARTUP_TEST: PASS') { throw 'No runtime evidence of an opened, full-preset Avalonia window' }
+          $png = Join-Path $PWD 'avalonia-spike/publish/ui-qa/Avalonia-Windows-Startup.png'
+          if (-not (Test-Path $png) -or (Get-Item $png).Length -lt 5000) { throw 'Real rendered full-workstation screenshot missing' }
+      - name: Install official signed Inno Setup compiler
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe'
+          $setup = Join-Path $env:RUNNER_TEMP 'innosetup-7.1.0-x64.exe'
+          Invoke-WebRequest -Uri $url -OutFile $setup
+          $sig = Get-AuthenticodeSignature -FilePath $setup
+          if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'Pyrsys B.V.') { throw 'Inno Setup Authenticode signature invalid' }
+          $proc = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/NORESTART','/SP-' -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw 'Inno Setup installation failed' }
+          $iscc = @('C:\Program Files\Inno Setup 7\ISCC.exe','C:\Program Files (x86)\Inno Setup 7\ISCC.exe') | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { throw 'ISCC.exe not found' }
+          & $iscc 'installer/VelomuxAvalonia.iss'
+          if ($LASTEXITCODE -ne 0) { throw 'Avalonia installer compilation failed' }
+      - name: Smoke-test actual install, bundled conversion and uninstall
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Join-Path $PWD 'avalonia-spike/installer-output/Velomux-Avalonia-Setup-0.4.0-Win-x64.exe'
+          if (-not (Test-Path $setup)) { throw 'Avalonia Setup.exe missing' }
+          $result = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait -PassThru
+          if ($result.ExitCode -ne 0) { throw "Avalonia installation failed: $($result.ExitCode)" }
+          $installed = Join-Path $env:LOCALAPPDATA 'Programs/Velomux-Avalonia'
+          $exe = Join-Path $installed 'Velomux.exe'
+          if (-not (Test-Path $exe)) { throw 'Installed GUI EXE missing' }
+          $engine = Join-Path $installed 'backend/Velomux.Engine/Velomux.Engine.exe'
+          if (-not (Test-Path $engine)) { throw 'Installed media engine missing' }
+          & $engine --integration-test
+          if ($LASTEXITCODE -ne 0) { throw 'Installed engine failed seven-workflow real media tests' }
+          $proc = Start-Process -FilePath $exe -ArgumentList '--desktop-startup-test' -PassThru
+          if (-not $proc.WaitForExit(60000)) {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            throw 'Installed Avalonia desktop startup timed out'
+          }
+          $proc.Refresh()
+          if ($proc.ExitCode -ne 0) { throw "Installed Avalonia GUI startup failed ($($proc.ExitCode))" }
+          $uninstaller = Join-Path $installed 'unins000.exe'
+          if (-not (Test-Path $uninstaller)) { throw 'Missing Inno Setup uninstaller' }
+          $remove = Start-Process -FilePath $uninstaller -ArgumentList '/VERYSILENT','/NORESTART','/SUPPRESSMSGBOXES' -Wait -PassThru
+          if ($remove.ExitCode -ne 0) { throw 'Avalonia uninstaller failed' }
+          if (Test-Path $exe) { throw 'Uninstall retained application executable' }
+      - name: Assemble portable ZIP and SHA-256 manifest
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = Join-Path $PWD 'avalonia-spike/installer-output'
+          $portable = Join-Path $out 'Velomux-Avalonia-Portable-0.4.0-Win-x64.zip'
+          Compress-Archive -Path 'avalonia-spike/publish/*' -DestinationPath $portable -CompressionLevel Optimal -Force
+          $setup = Join-Path $out 'Velomux-Avalonia-Setup-0.4.0-Win-x64.exe'
+          $checksums = foreach ($path in @($setup, $portable)) {
+            $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $([IO.Path]::GetFileName($path))"
+          }
+          $checksums | Set-Content (Join-Path $out 'SHA256SUMS.txt')
+          @(
+            "GitHub CI run: $env:GITHUB_RUN_ID"
+            "Source commit: $env:GITHUB_SHA"
+            "Windows x64; .NET 10 Avalonia 12; Python 3.12 frozen engine"
+            "Pinned FFmpeg with bundled ffprobe; SHA-256 verified in build"
+            "Seven workflow-family integration checks run on source, frozen engine, installed engine"
+            "Qt application unchanged; dedicated Avalonia installation directory"
+            "Private development artifact. Licensing, signing and real user media remain release gates."
+          ) | Set-Content (Join-Path $out 'BUILD_PROVENANCE.txt')
+      - name: Upload private Windows build artifacts (no GitHub Release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Velomux-Avalonia-0.4.0-Windows-x64-BUILD
+          path: |
+            avalonia-spike/installer-output/Velomux-Avalonia-Setup-0.4.0-Win-x64.exe
+            avalonia-spike/installer-output/Velomux-Avalonia-Portable-0.4.0-Win-x64.zip
+            avalonia-spike/installer-output/SHA256SUMS.txt
+            avalonia-spike/installer-output/BUILD_PROVENANCE.txt
+            avalonia-spike/publish/ui-qa/Avalonia-Windows-Startup.png
+          if-no-files-found: error
+          retention-days: 14
