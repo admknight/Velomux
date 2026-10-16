@@ -27,7 +27,7 @@
 
 ## Migration choice: Avalonia UI
 
-Use **Avalonia 12.1.x (MIT-licensed core)** with C# and XAML, MVVM, and .NET self-contained publishing. This is a qualified recommendation; availability of premium designer tools is NOT a framework requirement.
+Use **Avalonia 12.1.x (MIT-licensed core) and .NET 10 LTS (supported through November 2028)** with C# and XAML, MVVM, and .NET self-contained publishing. This is a qualified recommendation; availability of premium designer tools is NOT a framework requirement.
 
 **Candidate architecture**
 

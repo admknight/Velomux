@@ -17,7 +17,7 @@ A single end-to-end path is implemented: add files, choose M4A (AAC 192 kbps) or
 
 ## Running it from source
 
-Install the .NET 8 SDK. From the repository root:
+Install the .NET 10 LTS SDK. From the repository root:
 
     dotnet restore avalonia-spike/Velomux.Desktop/Velomux.Desktop.csproj
     dotnet run --project avalonia-spike/Velomux.Desktop/Velomux.Desktop.csproj
