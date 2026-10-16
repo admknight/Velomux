@@ -1,0 +1,13 @@
+__pycache__/
+.pytest_cache/
+*.pyc
+.venv/
+venv/
+dist/
+build/
+*.spec
+*.log
+.DS_Store
+vendor/ffmpeg/bin/*.exe
+vendor/ffmpeg/bin/ffmpeg
+vendor/ffmpeg/bin/ffprobe
