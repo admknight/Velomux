@@ -165,8 +165,42 @@ def _duration(info: dict) -> float:
 def _stream(info: dict, stream_type: str) -> Optional[dict]:
     return next((s for s in info.get('streams',[]) if s.get('codec_type') == stream_type), None)
 
-def _target_seconds(info: dict, options: Options) -> float:
-    total = _duration(info)
+def _stream_duration(info: dict, stream_type: str) -> float:
+    """Use the selected media stream's duration, not the container duration.
+
+    Video often continues after its audio track ends. Comparing an extracted M4A
+    with the longer video container incorrectly flags fully converted audio as bad.
+    """
+    stream = _stream(info, stream_type)
+    if stream:
+        try:
+            seconds = float(stream.get('duration', ''))
+            if math.isfinite(seconds) and seconds > 0:
+                return seconds
+        except (ValueError, TypeError):
+            pass
+        tags = stream.get('tags') or {}
+        duration_tag = tags.get('DURATION') or tags.get('duration')
+        if duration_tag:
+            try:
+                components = [float(part) for part in str(duration_tag).split(':')]
+                if len(components) == 3:
+                    seconds = components[0]*3600 + components[1]*60 + components[2]
+                    if math.isfinite(seconds) and seconds > 0:
+                        return seconds
+            except (ValueError, TypeError):
+                pass
+        try:
+            seconds = float(stream['duration_ts']) * float(stream['time_base'].split('/')[0]) / float(stream['time_base'].split('/')[1])
+            if math.isfinite(seconds) and seconds > 0:
+                return seconds
+        except (KeyError, ValueError, TypeError, ZeroDivisionError):
+            pass
+    return _duration(info)
+
+
+def _target_seconds(info: dict, options: Options, stream_type: str = 'video') -> float:
+    total = _stream_duration(info, stream_type)
     if total <= 0: return 0
     start = options.trim_start
     end = min(total, options.trim_end) if options.trim_end else total
@@ -504,7 +538,7 @@ def convert(source: Path | str, target_dir: Path | str, preset: Preset | str,
         destination = resolve_output(source,target_dir,preset,opt.collision,output_stem)
         # Probe once before checking validity, and account for trim and speed.
         info = probe(source)
-        expected = _target_seconds(info,opt) if preset.group != 'image' else 0.0
+        expected = _target_seconds(info,opt, 'audio' if preset.group == 'audio' else 'video') if preset.group != 'image' else 0.0
         if preset.group != 'image' and expected <= 0 and opt.trim_end:
             raise ConversionError('Invalid trim range for this source.')
         if destination.exists():
