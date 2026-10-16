@@ -208,7 +208,7 @@
               </Border>
 
               <StackPanel Grid.Row="3" Spacing="7">
-                <WrapPanel>
+                <WrapPanel IsVisible="{Binding HasQueue}">
                   <Button Content="Inspect selected" Classes="secondary"
                           Margin="0,0,7,0" IsEnabled="{Binding CanRemoveSelected}"
                           Click="Inspect_Click"/>
@@ -218,7 +218,7 @@
                 </WrapPanel>
                 <TextBlock Text="{Binding Status}" FontSize="11" Foreground="#B9CBE7"
                            TextWrapping="Wrap" MaxLines="2"/>
-                <Border Background="#14263C" CornerRadius="9" Padding="10,8">
+                <Border IsVisible="{Binding HasQueue}" Background="#14263C" CornerRadius="9" Padding="10,8">
                   <TextBlock Text="{Binding MediaInfo}" MaxLines="4"
                              TextWrapping="Wrap" FontSize="11" Foreground="#BED0E8"/>
                 </Border>
