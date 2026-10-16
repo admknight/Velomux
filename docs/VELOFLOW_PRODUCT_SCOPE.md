@@ -1,7 +1,7 @@
 # VeloFlow: curated Velomux media workstation roadmap
 
 **Product**: Velomux (independent open-source media utility in development)
-**Maintainer**: Adam Knight ([admknight](https://github.com/admknight))
+**Project Creator & Lead Maintainer**: Adam Knight ([admknight](https://github.com/admknight))
 **Principle**: learn *interaction patterns* from established tools; ship original
 Velomux UI, naming, implementation, code, and assets. No third-party project
 branding or proprietary visual/source assets are included.
