@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Input;
 using Avalonia.Platform.Storage;
 using Velomux.Desktop.Services;
 using Velomux.Desktop.ViewModels;
@@ -35,6 +36,25 @@ public partial class MainWindow : Window
         {
             Vm.Status = "File selection failed: " + ex.Message;
         }
+    }
+
+    private void Media_DragOver(object? sender, DragEventArgs e)
+    {
+        e.DragEffects = !Vm.IsRunning && e.DataTransfer.Contains(DataFormat.File)
+            ? DragDropEffects.Copy
+            : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void Media_Drop(object? sender, DragEventArgs e)
+    {
+        if (Vm.IsRunning) return;
+        var paths = e.DataTransfer.TryGetFiles()?.OfType<IStorageFile>()
+            .Select(file => file.TryGetLocalPath())
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => path!);
+        if (paths is not null) Vm.AddFiles(paths);
+        e.Handled = true;
     }
 
     private void RemoveSelected_Click(object? sender, RoutedEventArgs e) => Vm.RemoveSelected();
