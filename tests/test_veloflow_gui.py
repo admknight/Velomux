@@ -93,6 +93,7 @@ def test_imported_folder_root_tracked_for_preserve_hierarchy(window, tmp_path):
 def test_maintainer_and_third_party_credits_really_displayed(window):
     about_page = window.pages.widget(3)
     messages = ' '.join(w.text() for w in about_page.findChildren(QLabel))
+    assert 'Project Creator & Lead Maintainer' in messages
     assert 'Adam Knight' in messages
     assert '@admknight' in messages
     assert 'FFmpeg' in messages

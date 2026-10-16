@@ -2,7 +2,7 @@
 # No system-wide configuration is changed; Inno Setup installer is per-user.
 [CmdletBinding()]
 param(
-    [string]$SetupPath = (Join-Path (Split-Path -Parent $PSScriptRoot) 'dist\installer\Velomux-Setup-0.3.0-preview-Win-x64.exe'),
+    [string]$SetupPath = (Join-Path (Split-Path -Parent $PSScriptRoot) 'dist\installer\Velomux-Setup-0.3.1-preview-Win-x64.exe'),
     [string]$InstallDir = (Join-Path $env:TEMP 'VelomuxInstallerSmoke')
 )
 $ErrorActionPreference = 'Stop'
