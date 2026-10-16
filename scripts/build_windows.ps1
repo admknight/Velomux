@@ -267,7 +267,14 @@ finally {
     $env:QT_QPA_PLATFORM = $priorQpa
     $env:VELOMUX_GUI_SCREENSHOT = $priorScreenshot
 }
-Write-Host 'Bundled FFmpeg and REAL frozen Qt main-window smoke tests passed.' -ForegroundColor Green
+Write-Host 'Running REAL media conversions in the frozen application...' -ForegroundColor Cyan
+$integration = Start-Process -FilePath $application -ArgumentList '--media-integration-test' -PassThru -Wait
+if ($integration.ExitCode -ne 0) {
+    $log = Join-Path $env:TEMP 'Velomux-Media-Integration-Test.log'
+    if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log }
+    Fail "Frozen application media integration test failed (exit $($integration.ExitCode))."
+}
+Write-Host 'Frozen GUI and actual MP4/M4A/MP3/image conversions passed.' -ForegroundColor Green
 
 $portable = Join-Path $root 'dist\Velomux-Windows-Portable-x64.zip'
 if (Test-Path -LiteralPath $portable) { Remove-Item -LiteralPath $portable -Force }
