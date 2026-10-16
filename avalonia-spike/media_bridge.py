@@ -27,7 +27,7 @@ from velomux_flows import FLOWS
 
 
 def emit(**fields):
-    sys.stdout.write(json.dumps(fields, ensure_ascii=False, allow_nan=False) + "\n")
+    sys.stdout.write(json.dumps(fields, ensure_ascii=True, allow_nan=False) + "\n")
     sys.stdout.flush()
 
 
