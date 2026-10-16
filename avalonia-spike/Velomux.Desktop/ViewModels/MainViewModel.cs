@@ -51,6 +51,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
         Jobs.CollectionChanged += (_, _) =>
         {
             Changed(nameof(Queued));
+            Changed(nameof(HasQueue));
+            Changed(nameof(IsQueueEmpty));
             Changed(nameof(CanStart));
         };
     }
@@ -70,17 +72,23 @@ public sealed class MainViewModel : INotifyPropertyChanged
             Changed();
             Changed(nameof(CanStart));
             Changed(nameof(CanCancel));
+            Changed(nameof(CanAddFiles));
+            Changed(nameof(CanRemoveSelected));
         }
     }
     public bool CanCancel => IsRunning;
+    public bool CanAddFiles => !IsRunning;
+    public bool CanRemoveSelected => !IsRunning && SelectedJob is not null;
     public bool CanStart => !IsRunning && Jobs.Any(j => j.Status != "Completed");
+    public bool IsQueueEmpty => Jobs.Count == 0;
+    public bool HasQueue => Jobs.Count != 0;
     public int Queued => Jobs.Count;
     public int Completed => Jobs.Count(j => j.Status == "Completed");
     public int Failed => Jobs.Count(j => j.Status == "Failed");
     public MediaQueueItem? SelectedJob
     {
         get => _selectedJob;
-        set { _selectedJob = value; Changed(); }
+        set { _selectedJob = value; Changed(); Changed(nameof(CanRemoveSelected)); }
     }
     public AudioOutputFormat Format
     {
@@ -102,10 +110,14 @@ public sealed class MainViewModel : INotifyPropertyChanged
 
     public void AddFiles(IEnumerable<string> paths)
     {
+        // The picker returns no entries when cancelled; don't replace the
+        // initial Ready message with a misleading "Added 0" status.
+        var candidates = paths.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
+        if (candidates.Count == 0) return;
         var seen = Jobs.Select(j => System.IO.Path.GetFullPath(j.Path))
             .ToHashSet(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
         int added = 0, ignored = 0;
-        foreach (var path in paths)
+        foreach (var path in candidates)
         {
             if (!File.Exists(path) || !Supported.Contains(System.IO.Path.GetExtension(path)))
             {
@@ -119,8 +131,12 @@ public sealed class MainViewModel : INotifyPropertyChanged
                 added++;
             }
         }
-        Status = $"Added {added} audio-capable media file(s)."
-               + (ignored > 0 ? $" Ignored {ignored} unsupported input(s)." : "");
+        Status = added > 0
+            ? $"Added {added} audio-capable media file(s)."
+              + (ignored > 0 ? $" Ignored {ignored} unsupported input(s)." : "")
+            : ignored > 0
+                ? $"No supported media files were added ({ignored} incompatible item(s))."
+                : "Those files are already in your queue.";
     }
 
     public void RemoveSelected()
