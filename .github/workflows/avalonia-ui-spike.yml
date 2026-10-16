@@ -1,0 +1,104 @@
+name: Avalonia UI feasibility spike (NOT a release)
+
+on:
+  push:
+    branches: [spike/avalonia-ui-rebuild]
+    paths:
+      - "avalonia-spike/**"
+      - ".github/workflows/avalonia-ui-spike.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: avalonia-feasibility-spike
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Audit UI structure and media safety
+        run: python avalonia-spike/check_ui_structure.py
+      - name: Restore Avalonia packages
+        run: dotnet restore avalonia-spike/Velomux.Desktop/Velomux.Desktop.csproj
+      - name: Build Avalonia UI on Windows
+        run: dotnet build avalonia-spike/Velomux.Desktop/Velomux.Desktop.csproj -c Release --no-restore -warnaserror
+      - name: Publish standalone Windows evaluation executable with native dependencies bundled
+        run: dotnet publish avalonia-spike/Velomux.Desktop/Velomux.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishTrimmed=false -o avalonia-spike/publish
+      - name: Verify actual single-file packaging
+        shell: pwsh
+        run: |
+          $dir = Join-Path $PWD 'avalonia-spike/publish'
+          $exe = Join-Path $dir 'Velomux.Avalonia.Spike.exe'
+          if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'Published GUI executable missing.' }
+          $loose = @(Get-ChildItem -LiteralPath $dir -File -Filter '*.dll')
+          if ($loose.Count -gt 0) {
+            throw "Publish still contains $($loose.Count) external DLLs; single-EXE claim is invalid."
+          }
+          Write-Host "Self-contained Windows EXE size: $((Get-Item -LiteralPath $exe).Length) bytes"
+      - name: Launch PUBLISHED Windows GUI and verify main window opens
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path $PWD 'avalonia-spike/publish/Velomux.Avalonia.Spike.exe'
+          $log = Join-Path $env:LOCALAPPDATA 'Velomux/Logs/avalonia-startup.log'
+          if (Test-Path -LiteralPath $log) { Remove-Item -LiteralPath $log -Force }
+          $process = Start-Process -FilePath $exe -ArgumentList '--desktop-startup-test' -PassThru
+          if (-not $process.WaitForExit(35000)) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            throw 'Published Avalonia application did not open its window and exit in 35 seconds.'
+          }
+          $process.Refresh()
+          if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log }
+          if ($process.ExitCode -ne 0) {
+            throw "Published Avalonia window startup failed (exit $($process.ExitCode))."
+          }
+          if (-not (Test-Path -LiteralPath $log)) { throw 'No GUI startup event log was produced.' }
+          $events = Get-Content -LiteralPath $log -Raw
+          if ($events -notmatch 'DESKTOP_STARTUP_TEST: PASS') {
+            throw 'The executable exited without proving MainWindow.Opened and IsVisible=true.'
+          }
+          $image = Join-Path $PWD 'avalonia-spike/publish/ui-qa/Avalonia-Windows-Startup.png'
+          if (-not (Test-Path -LiteralPath $image -PathType Leaf)) {
+            throw 'No real rendered Windows GUI screenshot was captured.'
+          }
+          if ((Get-Item -LiteralPath $image).Length -lt 5000) {
+            throw 'GUI screenshot is empty or incomplete.'
+          }
+          Write-Host "Captured GUI visual-review evidence: $image"
+          Write-Host 'PASS: published Windows EXE opened, verified UI initial state, and rendered a screenshot.'
+      - name: Include Windows startup diagnostics and software fallback
+        shell: pwsh
+        run: |
+          Copy-Item -LiteralPath 'avalonia-spike/Run-Velomux-Diagnostics.cmd' -Destination 'avalonia-spike/publish/Run-Velomux-Diagnostics.cmd'
+          Copy-Item -LiteralPath 'avalonia-spike/Run-Velomux-Software-Rendering.cmd' -Destination 'avalonia-spike/publish/Run-Velomux-Software-Rendering.cmd'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Velomux-Avalonia-UI-SPIKE-NOT-FOR-RELEASE
+          path: avalonia-spike/publish/
+          if-no-files-found: error
+          retention-days: 7
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Audit UI structure and media safety
+        run: python avalonia-spike/check_ui_structure.py
+      - name: Restore Avalonia packages
+        run: dotnet restore avalonia-spike/Velomux.Desktop/Velomux.Desktop.csproj
+      - name: Build Avalonia UI on Linux
+        run: dotnet build avalonia-spike/Velomux.Desktop/Velomux.Desktop.csproj -c Release --no-restore -warnaserror
+      - name: Install FFmpeg integration toolchain
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Execute REAL MP4-to-M4A and MP3 conversion integration tests
+        run: dotnet run --project avalonia-spike/Velomux.Desktop/Velomux.Desktop.csproj -c Release --no-build -- --media-integration-test

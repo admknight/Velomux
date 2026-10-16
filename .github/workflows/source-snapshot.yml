@@ -1,0 +1,29 @@
+name: Velomux internal source snapshot
+on:
+  push:
+    branches: [spike/avalonia-ui-rebuild]
+    paths:
+      - ".github/workflows/source-snapshot.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Export relevant application source for migration QA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Velomux-Migration-Source
+          path: |
+            avalonia-spike/**
+            engine.py
+            velomux_flows.py
+            version.py
+            .github/workflows/avalonia-ui-spike.yml
+            .github/workflows/build-windows-installer.yml
+            docs/VELOFLOW_PRODUCT_SCOPE.md
+            scripts/build_windows.ps1
+          if-no-files-found: error
+          retention-days: 1
