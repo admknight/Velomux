@@ -27,7 +27,8 @@ def window(app):
 
 def test_all_curated_actions_really_appear_in_quick_mode(window):
     assert not window._quick_task_id
-    assert window.quick_panel.isVisible() is False or not window.advanced_formats.isVisible()
+    assert not window.quick_panel.isHidden(), 'Quick Mode must expose VeloFlow task buttons'
+    assert window.advanced_formats.isHidden(), 'Advanced-only controls must stay out of Quick Mode'
     assert len(window.flow_buttons) == len(FLOWS) == 7
     assert all(b.isCheckable() and b.isEnabled() for b in window.flow_buttons.values())
     assert not window.quick_profiles.isEnabled()
