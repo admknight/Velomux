@@ -45,6 +45,10 @@ jobs:
           python assets/generate_icons.py
           test -s assets/velomux.ico
           test -s assets/velomux.png
+      - name: Install FFmpeg for conversion integration tests
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
       - name: Verify Python source and execute unit tests
         run: |
           python -m pip install --disable-pip-version-check pytest
