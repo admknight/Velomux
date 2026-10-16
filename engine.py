@@ -304,6 +304,22 @@ def _codec_args(preset: Preset, source_info: dict, opt: Options) -> list[str]:
         raise ConversionError('Not an FFmpeg preset.')
     if not _stream(source_info, 'video'):
         raise ConversionError('Input has no video track.')
+    if preset.vcodec == 'copy':
+        # Remuxing is a stream-level operation, not just a single A/V track
+        # conversion. Preserve every video/audio/subtitle stream that the
+        # target container can accept. Never silently drop other languages.
+        if (_video_filters(opt) or opt.fps or opt.media_speed != 1
+                or opt.audio_normalize or opt.audio_sample_rate
+                or opt.audio_channels or abs(opt.audio_gain_db) > 0.001):
+            raise ConversionError(
+                'Stream-copy rewrap cannot apply filters, speed or audio processing. '
+                'Choose an encoding workflow for those operations.'
+            )
+        cmd += ['-map','0:v?', '-map','0:s?']
+        if not opt.mute_video:
+            cmd += ['-map','0:a?']
+        cmd += ['-c','copy']
+        return cmd
     cmd += ['-map','0:v:0']
     if preset.vcodec == 'gif':
         filt = _video_filters(opt)
@@ -312,9 +328,6 @@ def _codec_args(preset: Preset, source_info: dict, opt: Options) -> list[str]:
         cmd += ['-vf', ','.join(filt) if filt else 'fps=12', '-an','-sn','-dn']
         return cmd
     if not opt.mute_video and audio is not None: cmd += ['-map','0:a:0']
-    if preset.vcodec == 'copy' and ( _video_filters(opt) or opt.fps or opt.media_speed != 1 or opt.audio_normalize
-                                   or opt.audio_sample_rate or opt.audio_channels or opt.audio_gain_db):
-        raise ConversionError('Remux/stream copy is incompatible with filters, speed or audio processing.')
     cmd += ['-c:v',preset.vcodec]
     if preset.vcodec != 'copy':
         vf = _video_filters(opt)
