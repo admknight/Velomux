@@ -310,8 +310,8 @@
                   <StackPanel Margin="4,10,4,6" Spacing="8">
                     <TextBlock Text="Video quality (CRF)" Classes="label"/>
                     <TextBox Text="{Binding Quality, Mode=TwoWay}" Watermark="23"/>
-                    <TextBlock Text="Image quality (1–100)" Classes="label"/>
-                    <TextBox Text="{Binding ImageQuality, Mode=TwoWay}" Watermark="90"/>
+                    <TextBlock Text="Image quality (0 = preset, 1–100 override)" Classes="label"/>
+                    <TextBox Text="{Binding ImageQuality, Mode=TwoWay}" Watermark="0"/>
                     <TextBlock Text="Trim start (seconds)" Classes="label"/>
                     <TextBox Text="{Binding TrimStart, Mode=TwoWay}" Watermark="0"/>
                     <TextBlock Text="Trim end (seconds; 0 = source end)" Classes="label"/>
