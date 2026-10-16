@@ -3,6 +3,7 @@ name: Build Windows test installer
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 # Development artifacts ONLY. No ability to create/publish GitHub Releases.
