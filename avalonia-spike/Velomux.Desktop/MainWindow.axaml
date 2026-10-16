@@ -274,7 +274,7 @@
                             SelectedItem="{Binding PresetFamily, Mode=TwoWay}"
                             MinHeight="36"/>
                   <TextBox Text="{Binding PresetSearch, Mode=TwoWay}"
-                           Watermark="Search 51 available presets"/>
+                           PlaceholderText="Search 51 available presets"/>
                   <ComboBox ItemsSource="{Binding VisiblePresets}"
                             SelectedItem="{Binding SelectedPreset, Mode=TwoWay}"
                             MinHeight="38">
@@ -292,7 +292,7 @@
 
                 <TextBlock Text="SAVE OUTPUTS TO" Classes="label"/>
                 <TextBox Text="{Binding OutputDirectory, Mode=TwoWay}"
-                         Watermark="Choose an output folder" FontSize="12"/>
+                         PlaceholderText="Choose an output folder" FontSize="12"/>
                 <Button Content="Browse destination..." Classes="secondary"
                         HorizontalAlignment="Left" Click="ChooseFolder_Click"/>
                 <CheckBox Content="Preserve source folder hierarchy"
@@ -309,15 +309,15 @@
                 <Expander Header="Conversion settings" IsExpanded="False">
                   <StackPanel Margin="4,10,4,6" Spacing="8">
                     <TextBlock Text="Video quality (CRF)" Classes="label"/>
-                    <TextBox Text="{Binding Quality, Mode=TwoWay}" Watermark="23"/>
+                    <TextBox Text="{Binding Quality, Mode=TwoWay}" PlaceholderText="23"/>
                     <TextBlock Text="Image quality (0 = preset, 1–100 override)" Classes="label"/>
-                    <TextBox Text="{Binding ImageQuality, Mode=TwoWay}" Watermark="0"/>
+                    <TextBox Text="{Binding ImageQuality, Mode=TwoWay}" PlaceholderText="0"/>
                     <TextBlock Text="Trim start (seconds)" Classes="label"/>
-                    <TextBox Text="{Binding TrimStart, Mode=TwoWay}" Watermark="0"/>
+                    <TextBox Text="{Binding TrimStart, Mode=TwoWay}" PlaceholderText="0"/>
                     <TextBlock Text="Trim end (seconds; 0 = source end)" Classes="label"/>
-                    <TextBox Text="{Binding TrimEnd, Mode=TwoWay}" Watermark="0"/>
+                    <TextBox Text="{Binding TrimEnd, Mode=TwoWay}" PlaceholderText="0"/>
                     <TextBlock Text="Playback speed" Classes="label"/>
-                    <TextBox Text="{Binding Speed, Mode=TwoWay}" Watermark="1"/>
+                    <TextBox Text="{Binding Speed, Mode=TwoWay}" PlaceholderText="1"/>
                     <CheckBox Content="Normalize audio volume"
                               IsChecked="{Binding Normalize, Mode=TwoWay}" FontSize="11"/>
                     <CheckBox Content="Full decode output verification (slower)"
