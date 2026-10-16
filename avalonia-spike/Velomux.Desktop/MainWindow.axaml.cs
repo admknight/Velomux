@@ -277,9 +277,9 @@ public partial class MainWindow : Window
             directory = Path.GetFullPath(Vm.OutputDirectory.Trim());
             double start = ParseNumber(Vm.TrimStart, "Trim start", 0, 1000000);
             double end = ParseNumber(Vm.TrimEnd, "Trim end", 0, 1000000);
-            double speed = ParseNumber(Vm.Speed, "Playback speed", 0.1, 8);
+            double speed = ParseNumber(Vm.Speed, "Playback speed", 0.5, 2);
             int quality = (int)ParseNumber(Vm.Quality, "Video CRF", 0, 51);
-            int imageQuality = (int)ParseNumber(Vm.ImageQuality, "Image quality", 1, 100);
+            int imageQuality = (int)ParseNumber(Vm.ImageQuality, "Image quality", 0, 100);
             if (end != 0 && end <= start)
                 throw new ArgumentException("Trim end must be greater than trim start.");
             if (Vm.QuickMode && Vm.SelectedTask?.Id == "trim" && end == 0 && start == 0)
