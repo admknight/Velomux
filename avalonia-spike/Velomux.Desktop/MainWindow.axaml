@@ -67,8 +67,8 @@
     </Style>
   </Window.Styles>
 
-  <Grid ColumnDefinitions="220,*">
-    <Border Grid.Column="0" Background="#101A2B" BorderBrush="#2A3A54"
+  <Grid x:Name="AppShell" ColumnDefinitions="220,*">
+    <Border x:Name="NavSidebar" Grid.Column="0" Background="#101A2B" BorderBrush="#2A3A54"
             BorderThickness="0,0,1,0" Padding="20,25">
       <DockPanel LastChildFill="True">
         <StackPanel x:Name="CreatorCredits" DockPanel.Dock="Bottom" Spacing="9">
@@ -120,6 +120,9 @@
           <TextBlock Text="Your media. Your format." Classes="heading"/>
           <TextBlock Text="Fast, local media processing with clear controls."
                      Foreground="#A4B5CC" FontSize="13"/>
+          <TextBlock x:Name="CompactCreator"
+                     Text="Adam Knight · Project Creator &amp; Lead Maintainer"
+                     IsVisible="False" Foreground="#A69DFF" FontSize="11"/>
         </StackPanel>
         <Border Grid.Column="1" Background="#17312F" Padding="13,9"
                 CornerRadius="11" VerticalAlignment="Top">
