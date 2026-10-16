@@ -1,7 +1,7 @@
 ; Velomux Windows x64 installer - Inno Setup 7
 ; Local preview builds only until third-party licensing and runtime gates pass.
 #define ProductName "Velomux"
-#define ProductVersion "0.3.0"
+#define ProductVersion "0.3.1"
 #define ProductEdition "Preview"
 #define MainExecutable "Velomux.exe"
 
@@ -31,7 +31,7 @@ Compression=lzma2
 SolidCompression=yes
 CloseApplications=no
 RestartApplications=no
-VersionInfoVersion=0.3.0.0
+VersionInfoVersion=0.3.1.0
 VersionInfoDescription=Velomux media converter - Adam Knight, Creator & Lead Maintainer
 VersionInfoProductName={#ProductName}
 VersionInfoProductVersion={#ProductVersion}

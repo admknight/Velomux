@@ -9,10 +9,28 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_product_identity_and_no_old_brand():
     assert APP_NAME == 'Velomux'
-    assert APP_VERSION == '0.3.0-preview'
+    assert APP_VERSION == '0.3.1-preview'
     for relative in ('modern_app.py','app.py','engine.py','cli.py','version.py',
                      'README.md','installer/Velomux.iss','scripts/build_windows.ps1'):
         assert ('scope' + 'wise') not in (ROOT/relative).read_text(encoding='utf-8').lower()
+
+
+def test_creator_and_lead_maintainer_credit_is_consistent():
+    from version import PROJECT_CREATOR_NAME, PROJECT_CREATOR_HANDLE, PROJECT_CREATOR_ROLE
+
+    assert PROJECT_CREATOR_NAME == 'Adam Knight'
+    assert PROJECT_CREATOR_HANDLE == '@admknight'
+    assert PROJECT_CREATOR_ROLE == 'Project Creator & Lead Maintainer'
+    readme = (ROOT/'README.md').read_text(encoding='utf-8')
+    scope = (ROOT/'docs/VELOFLOW_PRODUCT_SCOPE.md').read_text(encoding='utf-8')
+    setup = (ROOT/'installer/Velomux.iss').read_text(encoding='utf-8')
+    version_resource = (ROOT/'scripts/windows_version.txt').read_text(encoding='utf-8')
+    assert '**Project Creator & Lead Maintainer:**' in readme
+    assert '**Project Creator & Lead Maintainer**' in scope
+    assert 'AppPublisher=Adam Knight' in setup
+    assert 'Creator & Lead Maintainer' in setup
+    assert "StringStruct('CompanyName', 'Adam Knight')" in version_resource
+    assert 'Project Creator & Lead Maintainer: Adam Knight (@admknight)' in version_resource
 
 
 def test_windows_ico_contains_brand_and_multiple_sizes():
@@ -30,12 +48,12 @@ def test_windows_ico_contains_brand_and_multiple_sizes():
 def test_inno_setup_source_matches_app_and_build_output():
     setup = (ROOT/'installer/Velomux.iss').read_text(encoding='utf-8')
     build = (ROOT/'scripts/build_windows.ps1').read_text(encoding='utf-8')
-    assert '#define ProductVersion "0.3.0"' in setup
+    assert '#define ProductVersion "0.3.1"' in setup
     assert 'SetupArchitecture=x64' in setup
     assert 'PrivilegesRequired=lowest' in setup
     assert 'Source: "..\\dist\\Velomux\\*"' in setup
     assert 'Velomux.exe' in setup
-    assert 'Velomux-Setup-0.3.0-preview-Win-x64.exe' in build
+    assert 'Velomux-Setup-0.3.1-preview-Win-x64.exe' in build
     assert '--add-binary "${ffmpeg};vendor/ffmpeg/bin"' in build
     assert '--add-binary "${ffprobe};vendor/ffmpeg/bin"' in build
     assert '--add-data' in build and 'velomux.png' in build
