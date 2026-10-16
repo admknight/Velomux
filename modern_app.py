@@ -454,27 +454,42 @@ class MainWindow(QMainWindow):
         return pane
 
     def _settings_panel(self) -> QWidget:
-        column = vbox(10)
+        # Make the entire settings side independently scrollable. Fixed-height
+        # inspector and cramped Qt tabs previously left advanced controls hidden.
+        column = vbox(11)
         column.addWidget(label('Conversion settings', 'Section'))
-        column.addWidget(label('Choose a format. Fine-tune options whenever needed.'))
+        column.addWidget(label('Choose from the format library, then fine-tune only when needed.'))
         self.family = QComboBox()
-        self.family.addItems(['Audio','Video','Image'])
+        self.family.addItems(['Audio', 'Video', 'Image'])
         self.family.currentTextChanged.connect(self._update_presets)
-        column.addWidget(label('FORMAT FAMILY'))
-        column.addWidget(self.family)
+        self._group_input(column, 'MEDIA CATEGORY', self.family)
+        self.preset_search = QLineEdit()
+        self.preset_search.setPlaceholderText('Search formats, codecs, or bitrates...')
+        self.preset_search.setClearButtonEnabled(True)
+        self.preset_search.textChanged.connect(self._filter_preset_library)
+        column.addWidget(self.preset_search)
+        self.library_count = label('Loading available presets...')
+        column.addWidget(self.library_count)
+        self.preset_list = QListWidget()
+        self.preset_list.setObjectName('PresetLibrary')
+        self.preset_list.setMinimumHeight(170)
+        self.preset_list.setMaximumHeight(196)
+        self.preset_list.currentItemChanged.connect(self._choose_list_preset)
+        column.addWidget(self.preset_list)
         self.preset = QComboBox()
-        column.addWidget(label('OUTPUT PRESET'))
-        column.addWidget(self.preset)
         self.preset.setEditable(True)
         self.preset.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.preset.completer().setFilterMode(Qt.MatchFlag.MatchContains)
         self.preset.completer().setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self.preset.currentTextChanged.connect(self._sync_preset_list)
+        self._group_input(column, 'SELECTED OUTPUT FORMAT', self.preset)
         self.mode = QComboBox()
-        self.mode.addItems(['Quick mode','Advanced mode'])
+        self.mode.addItems(['Quick mode', 'Advanced mode'])
         self._group_input(column, 'CONTROLS MODE', self.mode)
         self.mode.currentIndexChanged.connect(self._toggle_mode)
-        self.apply_button = button('Apply preset to selected files', self.apply_preset)
+        self.apply_button = button('Apply preset to selected files', self.apply_preset, 'Primary')
         column.addWidget(self.apply_button)
+        column.addWidget(label('Selected formats apply automatically to new compatible imports. Use the button above for files already in the queue.'))
         self.tabs = QTabWidget()
         self.tabs.addTab(self._general_tab(), 'General')
         self.tabs.addTab(self._video_tab(), 'Video')
@@ -482,18 +497,81 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self._image_tab(), 'Images')
         self.tabs.addTab(self._trim_tab(), 'Trim')
         self.tabs.setDocumentMode(True)
-        column.addWidget(self.tabs, 1)
-        column.addWidget(label('MEDIA INSPECTOR  ·  SELECTED FILE'))
+        self.tabs.setMinimumHeight(282)
+        column.addWidget(self.tabs)
+        self.inspector_dialog = QDialog(self)
+        self.inspector_dialog.setWindowTitle('Velomux · Media inspector')
+        self.inspector_dialog.resize(620, 340)
+        dialog_layout = vbox(12)
         self.inspector = QTextEdit()
         self.inspector.setReadOnly(True)
-        self.inspector.setFixedHeight(116)
-        self.inspector.setPlainText('Select a file to see its codec, resolution, duration and tracks.')
-        column.addWidget(self.inspector)
-        pane = card(column)
-        pane.setMinimumWidth(355)
+        self.inspector.setPlainText('Select an input to see its codecs, duration, tracks and conversion results.')
+        dialog_layout.addWidget(self.inspector, 1)
+        dialog_layout.addWidget(button('Close inspector', self.inspector_dialog.close))
+        self.inspector_dialog.setLayout(dialog_layout)
+        column.addWidget(button('Inspect selected media / conversion details  ↗', self._show_inspector))
+        column.addStretch(1)
+        inner = card(column, 'Panel', 17)
+        inner.setObjectName('Panel')
+        scroller = QScrollArea()
+        scroller.setWidgetResizable(True)
+        scroller.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroller.setWidget(inner)
+        scroller.setMinimumWidth(355)
         self._update_presets('Audio')
         self._toggle_mode()
-        return pane
+        return scroller
+
+    def _show_inspector(self):
+        self.show_selected_info()
+        self.inspector_dialog.show()
+        self.inspector_dialog.raise_()
+        self.inspector_dialog.activateWindow()
+
+    def _choose_list_preset(self, item, previous):
+        if item is None:
+            return
+        chosen = str(item.data(Qt.ItemDataRole.UserRole))
+        if chosen and self.preset.currentText() != chosen:
+            self.preset.setCurrentText(chosen)
+
+    def _sync_preset_list(self, name: str):
+        if not hasattr(self, 'preset_list'):
+            return
+        for index in range(self.preset_list.count()):
+            item = self.preset_list.item(index)
+            if item.data(Qt.ItemDataRole.UserRole) == name:
+                if self.preset_list.currentItem() is not item:
+                    self.preset_list.blockSignals(True)
+                    self.preset_list.setCurrentItem(item)
+                    self.preset_list.blockSignals(False)
+                return
+
+    def _filter_preset_library(self, query: str):
+        if not hasattr(self, 'preset_list'):
+            return
+        group = self.family.currentText().lower()
+        selected = self.preset.currentText()
+        candidates = [p for p in PRESETS if p.group == group]
+        term = query.casefold().strip()
+        self.preset_list.blockSignals(True)
+        self.preset_list.clear()
+        for preset in candidates:
+            if term and term not in preset.name.casefold():
+                continue
+            item = QListWidgetItem(preset.name)
+            item.setData(Qt.ItemDataRole.UserRole, preset.name)
+            item.setToolTip(
+                f'Output: {preset.ext.upper()}   ·   Video: {preset.vcodec or "none"}   ·   Audio: {preset.acodec or "none"}'
+            )
+            self.preset_list.addItem(item)
+            if preset.name == selected:
+                self.preset_list.setCurrentItem(item)
+        self.preset_list.blockSignals(False)
+        count = self.preset_list.count()
+        self.library_count.setText(
+            f'{count} visible {group} presets  ·  {len(candidates)} in category  ·  {len(PRESETS)} total'
+        )
 
     def _tab_shell(self) -> tuple[QWidget,QVBoxLayout]:
         page = QWidget()
@@ -720,8 +798,14 @@ class MainWindow(QMainWindow):
 
     def _update_presets(self, family: str):
         values = [p.name for p in PRESETS if p.group == family.lower()]
+        self.preset.blockSignals(True)
         self.preset.clear()
         self.preset.addItems(values)
+        self.preset.blockSignals(False)
+        if hasattr(self, 'preset_search'):
+            self.preset_search.clear()
+        self._filter_preset_library('')
+
 
     def _show_tools(self):
         a, b = which_tools()
