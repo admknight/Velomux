@@ -69,6 +69,11 @@ public partial class MainWindow : Window
         shell.ColumnDefinitions[0].Width = new GridLength(compact ? 0 : 218);
         credit.IsVisible = compact;
         navigation.IsVisible = compact;
+        var columns = this.FindControl<Grid>("WorkspaceColumns");
+        if (columns != null)
+            columns.ColumnDefinitions[1].Width = new GridLength(compact ? 340 : 410);
+        var activity = this.FindControl<StackPanel>("ActivityPanel");
+        if (activity != null) activity.IsVisible = Bounds.Height >= 790;
     }
 
     internal void AssertInitialUiReady()
@@ -96,7 +101,8 @@ public partial class MainWindow : Window
                 new Point(panel.Bounds.Width, panel.Bounds.Height), this);
             if (bottomRight == null || bottomRight.Value.X > Bounds.Width + 1
                 || bottomRight.Value.Y > Bounds.Height + 1)
-                throw new InvalidOperationException("Off-screen panel detected: " + key);
+                throw new InvalidOperationException(
+                    $"Off-screen panel detected: {key}, bottom-right={bottomRight}, panel={panel.Bounds}, window={Bounds}.");
         }
         var sidebar = this.FindControl<Border>("NavSidebar")!;
         var bar = this.FindControl<WrapPanel>("CompactTaskBar")!;
