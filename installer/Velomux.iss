@@ -32,7 +32,7 @@ SolidCompression=yes
 CloseApplications=no
 RestartApplications=no
 VersionInfoVersion=0.3.0.0
-VersionInfoDescription=Velomux media converter preview installer
+VersionInfoDescription=Velomux media converter - Adam Knight, Creator & Lead Maintainer
 VersionInfoProductName={#ProductName}
 VersionInfoProductVersion={#ProductVersion}
 
