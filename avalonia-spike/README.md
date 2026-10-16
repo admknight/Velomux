@@ -12,6 +12,20 @@ A single end-to-end path is implemented: add files, choose M4A (AAC 192 kbps) or
 
 - Only audio extraction is implemented in this spike. Other VeloFlow functions have **not** been ported and should not be advertised as working here.
 - The Windows artifact is an **engineering test executable**, not an installer or public release. It currently requires FFmpeg and ffprobe in its folder or developer PATH. It does NOT bundle FFmpeg yet.
+
+## Windows startup and troubleshooting
+
+1. Extract the **entire** GitHub Actions ZIP into a normal folder. Do not run from inside the ZIP.
+2. Run `Velomux.Avalonia.Spike.exe`. Neither .NET nor FFmpeg needs to be installed just to open its interface.
+3. If nothing appears, run `Run-Velomux-Diagnostics.cmd` in the same extracted folder. It reports the exit code and prints the most recent startup log.
+4. The persistent startup log is `%LOCALAPPDATA%\Velomux\Logs\avalonia-startup.log`. Managed startup failures also show a Windows dialog, including the error and log location.
+5. If the log suggests a graphics/rendering fault, try `Run-Velomux-Software-Rendering.cmd` (software-only graphics backend).
+6. If the log file was never created, the .NET host may have failed before the application started. Check **Windows Event Viewer > Windows Logs > Application** and note the faulting module. Do not run untrusted patches or disable Microsoft Defender.
+
+The CI packaging gate now embeds **native Avalonia/.NET libraries** into the self-extracting single EXE and launches that exact published file under Windows, requiring `Window.Opened` and `IsVisible=true`. Automated runner success is a startup gate, not native visual approval on every consumer GPU/DPI combination.
+
+**Send the last lines of the log and the Windows version/architecture** if the revised build still shows no window. Redact any private file paths before sharing.
+
 - There is no automatic updating, no signed setup, no whole-app feature parity, and no approval based on automated compilation alone.
 - Validation checks for a readable audio stream but still requires the original engine's stronger contract and real-world regression corpus before replacing the shipping path.
 
