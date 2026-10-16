@@ -21,37 +21,30 @@ jobs:
       - name: Install FFmpeg (Ubuntu)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - name: Install and verify FFmpeg (Windows CI with bounded retries)
+      - name: Fetch hash-pinned FFmpeg from GitHub Releases (Windows CI)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $choco = if ($env:ChocolateyInstall) { $env:ChocolateyInstall } else { 'C:\ProgramData\chocolatey' }
-          $toolsRoot = Join-Path $choco 'lib\ffmpeg\tools'
-          function Test-ActualFFmpeg {
-            if (-not (Test-Path -LiteralPath $toolsRoot -PathType Container)) { return $false }
-            foreach ($file in (Get-ChildItem -LiteralPath $toolsRoot -Filter 'ffmpeg.exe' -Recurse -File -ErrorAction SilentlyContinue)) {
-              $probe = Join-Path $file.DirectoryName 'ffprobe.exe'
-              if (-not (Test-Path -LiteralPath $probe -PathType Leaf)) { continue }
-              & $file.FullName -version 2>&1 | Out-Null
-              $ffmpegExit = $LASTEXITCODE
-              & $probe -version 2>&1 | Out-Null
-              if ($ffmpegExit -eq 0 -and $LASTEXITCODE -eq 0) { return $true }
-            }
-            return $false
-          }
-          $verified = Test-ActualFFmpeg
-          for ($attempt = 1; $attempt -le 4 -and -not $verified; $attempt++) {
-            Write-Host "FFmpeg dependency attempt $attempt of 4"
-            choco install ffmpeg --version=9.0.2 -y --no-progress
-            $verified = Test-ActualFFmpeg
-            if (-not $verified -and $attempt -lt 4) {
-              Write-Warning "FFmpeg not yet verified; retrying after backoff."
-              Start-Sleep -Seconds (5 * $attempt)
-            }
-          }
-          if (-not $verified) { throw 'FFmpeg/ffprobe binaries unavailable after four attempts; dependency feed may be unavailable.' }
-          (Join-Path $choco 'bin') >> $env:GITHUB_PATH
-          Write-Host 'Verified real FFmpeg and ffprobe executable binaries on Windows CI.'
+          $ErrorActionPreference = 'Stop'
+          $assetUrl = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-05-13-07/ffmpeg-n9.0.2-22-g46d8f462ee-win64-gpl-9.0.zip'
+          $expected = '1385d57bd30c009fca25655f056680317dc9db3724cf082443bf8830223877cf'
+          $archive = Join-Path $env:RUNNER_TEMP 'ffmpeg-pinned-9.0.2.zip'
+          $unpacked = Join-Path $env:RUNNER_TEMP 'ffmpeg-pinned-9.0.2'
+          Invoke-WebRequest -Uri $assetUrl -OutFile $archive
+          $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "FFmpeg archive SHA256 mismatch: $actual" }
+          Expand-Archive -LiteralPath $archive -DestinationPath $unpacked -Force
+          $ff = @(Get-ChildItem -LiteralPath $unpacked -Filter 'ffmpeg.exe' -Recurse -File)
+          if ($ff.Count -ne 1) { throw "Expected one bundled ffmpeg.exe, found $($ff.Count)" }
+          $peer = Join-Path $ff[0].DirectoryName 'ffprobe.exe'
+          if (-not (Test-Path -LiteralPath $peer -PathType Leaf)) { throw 'ffprobe.exe missing in pinned FFmpeg distribution.' }
+          & $ff[0].FullName -version | Select-Object -First 1
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned ffmpeg.exe validation failed.' }
+          & $peer -version | Select-Object -First 1
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned ffprobe.exe validation failed.' }
+          "FFMPEG_BIN_DIR=$($ff[0].DirectoryName)" >> $env:GITHUB_ENV
+          $ff[0].DirectoryName >> $env:GITHUB_PATH
+          Write-Host 'SHA-256 verified, fixed-release FFmpeg/ffprobe binaries staged (private test build).'
       - name: Install dependencies
         run: python -m pip install -r requirements-dev.txt
       - name: Static Python validation
