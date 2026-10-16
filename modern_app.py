@@ -73,6 +73,10 @@ QPushButton#Ghost:hover { background: #1E2A40; color: #F6F8FF; }
 QPushButton#Nav { background: transparent; border: none; border-radius: 12px; text-align: left; padding: 13px 16px; color: #9DB0CA; font-weight: 600; }
 QPushButton#Nav:hover { background: #18263B; color: #F7F9FD; }
 QPushButton#Nav[active="true"] { background: #27264D; color: #E6E1FF; border-left: 3px solid #8980FF; }
+QPushButton#FlowCard { background: #19263B; color: #E3EAF7; border: 1px solid #32445D; border-radius: 12px; padding: 9px 10px; text-align: left; font-size: 10pt; font-weight: 700; }
+QPushButton#FlowCard:hover { background: #24375A; border: 1px solid #8980FF; }
+QPushButton#FlowCard:checked { background: #353266; border: 2px solid #A69CFF; color: #FFFFFF; }
+
 QComboBox, QLineEdit, QSpinBox, QDoubleSpinBox { background: #182338; border: 1px solid #2D3C54; border-radius: 9px; padding: 8px 11px; selection-background-color: #635DCF; min-height: 20px; }
 QComboBox:focus, QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus { border: 1px solid #8980FF; }
 QComboBox QAbstractItemView { background: #182338; color: #F0F4FA; selection-background-color: #3C427C; border: 1px solid #34445E; }
@@ -942,16 +946,73 @@ class MainWindow(QMainWindow):
 
     def _about_page(self) -> QWidget:
         page = QWidget()
-        l = vbox(15)
-        l.setContentsMargins(0,0,0,0)
-        l.addWidget(label('Velomux', 'Title'))
-        l.addWidget(label('An offline-first video, audio and image converter, powered by FFmpeg and Pillow. An open-source release is planned.'))
-        l.addWidget(label(f'Preview build  {APP_VERSION}'))
-        l.addWidget(label('Contributors are welcome once the public repository and licensing package are ready.'))
-        l.addWidget(label('The app itself does not upload your media. Update checks, when enabled, require a GitHub request initiated by the user.'))
-        l.addWidget(label('FFmpeg / Qt / Pillow are third-party components. Release distributors must satisfy their respective license requirements.'))
-        l.addStretch()
-        page.setLayout(l)
+        layout = vbox(17)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        brand_line = hbox(15)
+        logo = label('', 'Logo')
+        logo.setPixmap(brand_pixmap(72))
+        logo.setFixedSize(72, 72)
+        brand_line.addWidget(logo)
+        product_line = vbox(3)
+        product_line.addWidget(label('Velomux', 'Title'))
+        product_line.addWidget(label('Convert your media, your way.', 'SubTitle'))
+        product_line.addWidget(label(f'Version {APP_VERSION} · Development preview'))
+        brand_line.addLayout(product_line)
+        brand_line.addStretch(1)
+        layout.addLayout(brand_line)
+
+        overview = vbox(10)
+        overview.addWidget(label('ABOUT THE PROJECT', 'Caption'))
+        overview.addWidget(label(
+            'Velomux is an independent, offline-first video, audio and image '
+            'workstation. VeloFlow provides task-first conversions while Advanced '
+            'Mode exposes codec and processing controls.'
+        ))
+        layout.addWidget(card(overview, 'Panel', 18))
+
+        people = vbox(9)
+        people.addWidget(label('PROJECT MAINTENANCE', 'Caption'))
+        people.addWidget(label('Maintained by Adam Knight (@admknight)', 'Section'))
+        people.addWidget(label(
+            'Source, issue tracking and development builds are managed through '
+            'the official Velomux GitHub repository.'
+        ))
+        links = hbox(9)
+        links.addWidget(button(
+            'GitHub repository ↗',
+            lambda: QDesktopServices.openUrl(
+                QUrl('https://github.com/admknight/Velomux')
+            )
+        ))
+        links.addWidget(button(
+            'Report a problem ↗',
+            lambda: QDesktopServices.openUrl(
+                QUrl('https://github.com/admknight/Velomux/issues')
+            )
+        ))
+        links.addStretch(1)
+        people.addLayout(links)
+        layout.addWidget(card(people, 'Panel', 18))
+
+        licenses = vbox(10)
+        licenses.addWidget(label('TECHNOLOGY & CREDITS', 'Caption'))
+        licenses.addWidget(label(
+            'Media processing: FFmpeg / ffprobe. Interface: Qt 6 for Python '
+            '(PySide6). Images: Pillow. Thanks to their contributors and maintainers.'
+        ))
+        licenses.addWidget(label(
+            'The application license and full third-party redistribution package '
+            'are pending approval for a public open-source release. '
+            'This preview must not be presented as a cleared public release.'
+        ))
+        licenses.addWidget(label(
+            'Your media is processed locally. An optional update check contacts '
+            'GitHub only after you request it.'
+        ))
+        layout.addWidget(card(licenses, 'Panel', 18))
+        layout.addStretch(1)
+        page.setLayout(layout)
         return page
 
     def _toggle_mode(self):
