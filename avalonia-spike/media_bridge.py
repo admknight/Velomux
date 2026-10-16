@@ -13,6 +13,12 @@ import tempfile
 import threading
 from pathlib import Path
 
+# Running this file directly from its subdirectory must locate the repository
+# engine module; PyInstaller also receives the repository root via --paths.
+root = Path(__file__).resolve().parent.parent
+if str(root) not in sys.path:
+    sys.path.insert(0, str(root))
+
 from engine import (
     PRESETS, PRESET_MAP, Options, SUPPORTED_SUFFIXES, VIDEO_SUFFIXES,
     AUDIO_SUFFIXES, IMAGE_SUFFIXES, convert, describe, which_tools,
