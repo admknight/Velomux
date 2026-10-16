@@ -1,0 +1,204 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Velomux.Desktop.MainWindow"
+        Title="Velomux — Avalonia interface evaluation"
+        Width="1320" Height="840"
+        MinWidth="1060" MinHeight="650"
+        WindowStartupLocation="CenterScreen"
+        Background="#080F1B"
+        Foreground="#EAF1FC"
+        FontFamily="Segoe UI">
+  <Window.Styles>
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="#121E30" />
+      <Setter Property="BorderBrush" Value="#293B54" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="16" />
+    </Style>
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="#9387FF" />
+      <Setter Property="Foreground" Value="#14152B" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Padding" Value="20,11" />
+      <Setter Property="CornerRadius" Value="10" />
+    </Style>
+    <Style Selector="Button.secondary">
+      <Setter Property="Background" Value="#1D2D46" />
+      <Setter Property="Foreground" Value="#F1F5FC" />
+      <Setter Property="Padding" Value="16,10" />
+      <Setter Property="CornerRadius" Value="10" />
+    </Style>
+    <Style Selector="TextBlock.eyebrow">
+      <Setter Property="Foreground" Value="#93A7C4" />
+      <Setter Property="FontSize" Value="11" />
+    </Style>
+    <Style Selector="TextBlock.heading">
+      <Setter Property="FontSize" Value="25" />
+      <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+  </Window.Styles>
+
+  <Grid ColumnDefinitions="218,*">
+    <Border Grid.Column="0" Background="#111A2B" BorderBrush="#293A52"
+            BorderThickness="0,0,1,0" Padding="22,28">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Spacing="18">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Border Background="#343568" Width="42" Height="42" CornerRadius="12">
+              <TextBlock Text="V" FontSize="26" FontWeight="Bold"
+                         Foreground="#83EBDF" HorizontalAlignment="Center"
+                         VerticalAlignment="Center"/>
+            </Border>
+            <StackPanel VerticalAlignment="Center" Spacing="2">
+              <TextBlock Text="VELOMUX" FontWeight="Bold" FontSize="16" Foreground="#DFD9FF"/>
+              <TextBlock Text="MEDIA WORKSTATION" Classes="eyebrow"/>
+            </StackPanel>
+          </StackPanel>
+          <Border Height="1" Background="#26364F"/>
+          <TextBlock Text="INTERFACE EVALUATION" Classes="eyebrow"/>
+          <Border Padding="12" Background="#302F62" CornerRadius="10">
+            <TextBlock Text="Extract Audio" FontWeight="Bold" Foreground="#F6F3FF"/>
+          </Border>
+          <TextBlock Text="This proof verifies a real, limited audio-conversion workflow. Other VeloFlow modules remain in the existing application until migrated and tested."
+                     TextWrapping="Wrap" Foreground="#ADC0D6" FontSize="12"/>
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Bottom" Spacing="8">
+          <Border Height="1" Background="#26364F"/>
+          <TextBlock Text="PROJECT CREATOR &amp; LEAD MAINTAINER" Classes="eyebrow"
+                     TextWrapping="Wrap"/>
+          <TextBlock Text="Adam Knight  ·  @admknight" FontWeight="Bold"
+                     Foreground="#E8DEFF" TextWrapping="Wrap"/>
+          <TextBlock Text="AVALONIA SPIKE  ·  NOT FOR DISTRIBUTION"
+                     FontSize="10" Foreground="#8FA6C1" TextWrapping="Wrap"/>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <Grid Grid.Column="1" Margin="24,22" RowDefinitions="Auto,*" RowSpacing="16">
+      <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+        <StackPanel Spacing="4">
+          <TextBlock Text="Your media. Your format." Classes="heading"/>
+          <TextBlock Text="A cleaner, testable interface — powered by local FFmpeg."
+                     Foreground="#9DADC5" FontSize="12"/>
+        </StackPanel>
+        <Border Grid.Column="1" Background="#17302F" Padding="12,9"
+                CornerRadius="12" VerticalAlignment="Top">
+          <TextBlock Text="LOCAL PROCESSING" Foreground="#6CE0C2" FontSize="11"/>
+        </Border>
+      </Grid>
+
+      <Grid Grid.Row="1" ColumnDefinitions="*,410" ColumnSpacing="16">
+        <Border Grid.Column="0" Classes="card" Padding="17">
+          <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="14">
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel Spacing="4">
+                <TextBlock Text="Conversion queue" FontSize="18" FontWeight="Bold"/>
+                <TextBlock Text="Original media files are never modified."
+                           Classes="eyebrow"/>
+              </StackPanel>
+              <TextBlock Grid.Column="1" VerticalAlignment="Center"
+                         Foreground="#A69BFF" FontWeight="Bold"
+                         Text="{Binding Queued, StringFormat='Queued: {0}'}"/>
+            </Grid>
+            <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
+              <Button Content="+ Add files" Classes="primary" Click="AddFiles_Click"/>
+              <Button Content="Remove selected" Classes="secondary"
+                      Click="RemoveSelected_Click"/>
+            </StackPanel>
+            <Border Grid.Row="2" BorderBrush="#263952" BorderThickness="1"
+                    CornerRadius="11" Background="#0E1727">
+              <Grid RowDefinitions="Auto,*">
+                <Grid Margin="12,10" ColumnDefinitions="*,96">
+                  <TextBlock Text="MEDIA FILE" Classes="eyebrow"/>
+                  <TextBlock Grid.Column="1" Text="STATUS" Classes="eyebrow"/>
+                </Grid>
+                <ListBox Grid.Row="1"
+                         ItemsSource="{Binding Jobs}"
+                         SelectedItem="{Binding SelectedJob, Mode=TwoWay}"
+                         Background="Transparent" BorderThickness="0">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate>
+                      <Grid ColumnDefinitions="*,96" Margin="8,6">
+                        <StackPanel Spacing="2">
+                          <TextBlock Text="{Binding FileName}" TextTrimming="CharacterEllipsis"
+                                     FontSize="12" FontWeight="SemiBold"/>
+                          <TextBlock Text="{Binding Detail}" TextTrimming="CharacterEllipsis"
+                                     Foreground="#8FA7C5" FontSize="11"/>
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" Text="{Binding Status}"
+                                   Foreground="#9BDCCB" FontSize="11"
+                                   VerticalAlignment="Center"/>
+                      </Grid>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+              </Grid>
+            </Border>
+            <StackPanel Grid.Row="3" Spacing="8">
+              <TextBlock Text="{Binding Status}" TextWrapping="Wrap"
+                         Foreground="#B5C5DB" FontSize="12"/>
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="Progress is reported as job states, not a fake percentage."
+                           Classes="eyebrow" TextWrapping="Wrap"
+                           VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1"
+                           Text="{Binding Completed, StringFormat='Successful: {0}'}"
+                           Foreground="#6AE8C1"/>
+              </Grid>
+            </StackPanel>
+          </Grid>
+        </Border>
+
+        <Border Grid.Column="1" Classes="card">
+          <!-- One settings scrollbar. No nested scroll areas or wheel-changing tabs. -->
+          <ScrollViewer VerticalScrollBarVisibility="Auto"
+                        HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="18,18,22,18" Spacing="13">
+              <TextBlock Text="Extract audio" FontSize="18" FontWeight="Bold"/>
+              <TextBlock Text="A small, real conversion workflow to evaluate the Avalonia layout."
+                         Foreground="#9BACBF" TextWrapping="Wrap"/>
+              <Border Background="#19273E" Padding="12" CornerRadius="9">
+                <TextBlock Text="PURPOSE  ·  Video or audio to a new audio file"
+                           Foreground="#B9CAEA" FontSize="12"
+                           TextWrapping="Wrap"/>
+              </Border>
+              <TextBlock Text="OUTPUT PROFILE" Classes="eyebrow"/>
+              <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                <Button Content="M4A · AAC" Classes="secondary"
+                        Click="M4a_Click" Padding="12,13"/>
+                <Button Grid.Column="1" Content="MP3" Classes="secondary"
+                        Click="Mp3_Click" Padding="12,13"/>
+              </Grid>
+              <TextBlock Text="{Binding FormatDescription}" TextWrapping="Wrap"
+                         Foreground="#C2C6F7" FontSize="12"/>
+              <Border Height="1" Background="#2A3B54"/>
+              <TextBlock Text="OUTPUT DIRECTORY" Classes="eyebrow"/>
+              <TextBox Text="{Binding OutputDirectory, Mode=TwoWay}"
+                       Watermark="Choose destination folder"/>
+              <Button Content="Browse destination..." Classes="secondary"
+                      HorizontalAlignment="Left" Click="ChooseFolder_Click"/>
+              <TextBlock Text="OUTPUT SAFETY" Classes="eyebrow"/>
+              <StackPanel Spacing="7">
+                <TextBlock Text="• Output is written to a temporary file before validation."
+                           FontSize="12" Foreground="#AFBED4" TextWrapping="Wrap"/>
+                <TextBlock Text="• Existing output files are not overwritten."
+                           FontSize="12" Foreground="#AFBED4" TextWrapping="Wrap"/>
+                <TextBlock Text="• The source file is never modified."
+                           FontSize="12" Foreground="#AFBED4" TextWrapping="Wrap"/>
+                <TextBlock Text="• Cancellation removes any unfinished staged output."
+                           FontSize="12" Foreground="#AFBED4" TextWrapping="Wrap"/>
+              </StackPanel>
+              <Border Height="1" Background="#2A3B54"/>
+              <Button Content="Start conversion" Classes="primary"
+                      IsEnabled="{Binding CanStart}" Click="Convert_Click"/>
+              <Button Content="Cancel current batch" Classes="secondary"
+                      IsEnabled="{Binding CanCancel}" Click="Cancel_Click"/>
+              <TextBlock Text="Engineering evaluation only. Requires local FFmpeg/ffprobe until the eventual installer is bundled and validated."
+                         Classes="eyebrow" TextWrapping="Wrap"/>
+            </StackPanel>
+          </ScrollViewer>
+        </Border>
+      </Grid>
+    </Grid>
+  </Grid>
+</Window>

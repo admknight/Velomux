@@ -1,0 +1,53 @@
+name: Avalonia UI feasibility spike (NOT a release)
+
+on:
+  push:
+    branches: [spike/avalonia-ui-rebuild]
+    paths:
+      - "avalonia-spike/**"
+      - ".github/workflows/avalonia-ui-spike.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: avalonia-feasibility-spike
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Audit UI structure and media safety
+        run: python avalonia-spike/check_ui_structure.py
+      - name: Restore Avalonia packages
+        run: dotnet restore avalonia-spike/Velomux.Desktop/Velomux.Desktop.csproj
+      - name: Build Avalonia UI on Windows
+        run: dotnet build avalonia-spike/Velomux.Desktop/Velomux.Desktop.csproj -c Release --no-restore -warnaserror
+      - name: Publish standalone Windows evaluation executable
+        run: dotnet publish avalonia-spike/Velomux.Desktop/Velomux.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=false -o avalonia-spike/publish
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Velomux-Avalonia-UI-SPIKE-NOT-FOR-RELEASE
+          path: avalonia-spike/publish/
+          if-no-files-found: error
+          retention-days: 7
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Audit UI structure and media safety
+        run: python avalonia-spike/check_ui_structure.py
+      - name: Restore Avalonia packages
+        run: dotnet restore avalonia-spike/Velomux.Desktop/Velomux.Desktop.csproj
+      - name: Build Avalonia UI on Linux
+        run: dotnet build avalonia-spike/Velomux.Desktop/Velomux.Desktop.csproj -c Release --no-restore -warnaserror

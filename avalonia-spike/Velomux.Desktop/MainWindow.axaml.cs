@@ -1,0 +1,137 @@
+using Avalonia.Controls;
+using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
+using Velomux.Desktop.Services;
+using Velomux.Desktop.ViewModels;
+
+namespace Velomux.Desktop;
+
+public partial class MainWindow : Window
+{
+    private CancellationTokenSource? _activeBatch;
+    private MainViewModel Vm => (MainViewModel)DataContext!;
+
+    public MainWindow()
+    {
+        InitializeComponent();
+        DataContext = new MainViewModel();
+    }
+
+    private async void AddFiles_Click(object? sender, RoutedEventArgs e)
+    {
+        if (Vm.IsRunning) return;
+        try
+        {
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Select media containing audio",
+                AllowMultiple = true,
+            });
+            Vm.AddFiles(files.Select(x => x.TryGetLocalPath())
+                             .Where(x => !string.IsNullOrWhiteSpace(x))
+                             .Select(x => x!));
+        }
+        catch (Exception ex)
+        {
+            Vm.Status = "File selection failed: " + ex.Message;
+        }
+    }
+
+    private void RemoveSelected_Click(object? sender, RoutedEventArgs e) => Vm.RemoveSelected();
+
+    private void M4a_Click(object? sender, RoutedEventArgs e) =>
+        Vm.Format = AudioOutputFormat.M4a;
+
+    private void Mp3_Click(object? sender, RoutedEventArgs e) =>
+        Vm.Format = AudioOutputFormat.Mp3;
+
+    private async void ChooseFolder_Click(object? sender, RoutedEventArgs e)
+    {
+        if (Vm.IsRunning) return;
+        try
+        {
+            var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+            {
+                Title = "Choose output directory",
+                AllowMultiple = false,
+            });
+            var selected = folders.FirstOrDefault()?.TryGetLocalPath();
+            if (!string.IsNullOrWhiteSpace(selected)) Vm.OutputDirectory = selected;
+        }
+        catch (Exception ex)
+        {
+            Vm.Status = "Destination selection failed: " + ex.Message;
+        }
+    }
+
+    private async void Convert_Click(object? sender, RoutedEventArgs e)
+    {
+        if (Vm.IsRunning || !Vm.Jobs.Any(j => j.Status != "Completed")) return;
+        var folder = Vm.OutputDirectory.Trim();
+        if (folder.Length == 0)
+        {
+            Vm.Status = "Please select a destination folder.";
+            return;
+        }
+
+        _activeBatch = new CancellationTokenSource();
+        Vm.IsRunning = true;
+        var format = Vm.Format;
+        try
+        {
+            foreach (var job in Vm.Jobs.ToList())
+            {
+                _activeBatch.Token.ThrowIfCancellationRequested();
+                if (job.Status == "Completed") continue;
+
+                job.Status = "Processing";
+                job.Detail = "FFmpeg audio extraction in progress";
+                Vm.Status = "Processing: " + job.FileName;
+                try
+                {
+                    string saved = await AudioConversionService.ExtractAsync(
+                        job.Path, folder, format, _activeBatch.Token);
+                    job.Status = "Completed";
+                    job.Detail = saved;
+                    Vm.Status = "Saved: " + saved;
+                }
+                catch (OperationCanceledException)
+                {
+                    job.Status = "Cancelled";
+                    job.Detail = "User cancelled. No partial file was published.";
+                    Vm.Status = "Cancelled. Originals are unchanged.";
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    job.Status = "Failed";
+                    job.Detail = ex.GetType().Name + ": " + ex.Message;
+                    Vm.Status = "Failed: " + job.FileName + " — " + ex.Message;
+                }
+                finally
+                {
+                    Vm.NotifyFinished();
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            Vm.Status = "Batch cancelled. Originals are unchanged.";
+        }
+        finally
+        {
+            Vm.IsRunning = false;
+            _activeBatch.Dispose();
+            _activeBatch = null;
+            Vm.NotifyFinished();
+        }
+    }
+
+    private void Cancel_Click(object? sender, RoutedEventArgs e) => _activeBatch?.Cancel();
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _activeBatch?.Cancel();
+        base.OnClosed(e);
+    }
+}
