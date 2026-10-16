@@ -22,15 +22,49 @@ jobs:
         with:
           python-version: '3.12'
           architecture: 'x64'
-      - name: Install FFmpeg for PRIVATE test build
+      - name: Install and verify FFmpeg with bounded retries (PRIVATE test build)
         shell: pwsh
         run: |
-          choco install ffmpeg -y --no-progress
-          if ($LASTEXITCODE -ne 0) { throw 'Chocolatey FFmpeg installation failed.' }
-          if (Test-Path 'C:\ProgramData\chocolatey\bin\ffmpeg.exe') {
-            'C:\ProgramData\chocolatey\bin' >> $env:GITHUB_PATH
+          $toolRoot = 'C:\ProgramData\chocolatey\lib\ffmpeg\tools'
+          $ready = $false
+          for ($attempt = 1; $attempt -le 4; $attempt++) {
+            if (Test-Path -LiteralPath $toolRoot) {
+              $candidates = @(Get-ChildItem -LiteralPath $toolRoot -Filter ffmpeg.exe -Recurse -File -ErrorAction SilentlyContinue)
+              foreach ($exe in $candidates) {
+                $probe = Join-Path $exe.DirectoryName 'ffprobe.exe'
+                if (Test-Path -LiteralPath $probe -PathType Leaf) {
+                  & $exe.FullName -version 2>&1 | Out-Null
+                  $ffmpegCode = $LASTEXITCODE
+                  & $probe -version 2>&1 | Out-Null
+                  if ($ffmpegCode -eq 0 -and $LASTEXITCODE -eq 0) { $ready = $true; break }
+                }
+              }
+            }
+            if ($ready) { break }
+            Write-Host "FFmpeg dependency installation attempt $attempt of 4..."
+            choco install ffmpeg --version=9.0.2 -y --no-progress
+            $installExit = $LASTEXITCODE
+            if ($attempt -lt 4) {
+              Write-Warning "FFmpeg installation returned $installExit; verifying and retrying if necessary."
+              Start-Sleep -Seconds (5 * $attempt)
+            }
           }
-          # The build script resolves actual FFmpeg files, NOT Chocolatey shims.
+          if (-not $ready) {
+            # Verify one final time after the fourth installation attempt.
+            $candidates = @(Get-ChildItem -LiteralPath $toolRoot -Filter ffmpeg.exe -Recurse -File -ErrorAction SilentlyContinue)
+            foreach ($exe in $candidates) {
+              $probe = Join-Path $exe.DirectoryName 'ffprobe.exe'
+              if (Test-Path -LiteralPath $probe -PathType Leaf) {
+                & $exe.FullName -version 2>&1 | Out-Null
+                $ffmpegCode = $LASTEXITCODE
+                & $probe -version 2>&1 | Out-Null
+                if ($ffmpegCode -eq 0 -and $LASTEXITCODE -eq 0) { $ready = $true; break }
+              }
+            }
+          }
+          if (-not $ready) { throw 'Verified FFmpeg/ffprobe binaries unavailable after four attempts. Dependency feed may be down.' }
+          'C:\ProgramData\chocolatey\bin' >> $env:GITHUB_PATH
+          Write-Host 'Verified actual FFmpeg and ffprobe binaries. The build script excludes Chocolatey shims.'
       - name: Install official Inno Setup 7.1.0 (Authenticode checked)
         shell: pwsh
         run: |
