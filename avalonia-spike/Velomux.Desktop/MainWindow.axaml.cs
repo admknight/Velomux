@@ -20,6 +20,11 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = new MainViewModel();
+        Vm.PropertyChanged += (_, change) =>
+        {
+            if (change.PropertyName == nameof(MainViewModel.IsRunning))
+                QueueTaskLayoutRefresh();
+        };
         SizeChanged += (_, _) =>
         {
             UpdateResponsiveShell();
@@ -143,6 +148,20 @@ public partial class MainWindow : Window
             new Point(actionFooter.Bounds.Width, actionFooter.Bounds.Height), this);
         if (bottom == null || bottom.Value.Y > Bounds.Height + 1)
             throw new InvalidOperationException("Conversion actions extend below the window.");
+        var cancelButton = this.FindControl<Button>("CancelActiveButton")!;
+        Vm.IsRunning = true;
+        UpdateLayout();
+        UpdateWorkspaceHeight();
+        UpdateLayout();
+        var runningFooterBottom = actionFooter.TranslatePoint(
+            new Point(actionFooter.Bounds.Width, actionFooter.Bounds.Height), this);
+        if (!cancelButton.IsVisible || runningFooterBottom == null ||
+            runningFooterBottom.Value.Y > Bounds.Height + 1)
+            throw new InvalidOperationException("Cancel action clipped while converting.");
+        Vm.IsRunning = false;
+        UpdateLayout();
+        UpdateWorkspaceHeight();
+        UpdateLayout();
         // Exercise all seven workflows against the same rendered controls. This
         // catches the old problem where switching tasks only changed a heading.
         var trim = this.FindControl<StackPanel>("TrimOptions")!;
