@@ -258,25 +258,29 @@
           </Border>
 
           <Border x:Name="SettingsPanel" Grid.Column="1" Classes="card">
-            <ScrollViewer x:Name="SettingsViewport" VerticalScrollBarVisibility="Auto"
+            <Grid RowDefinitions="Auto,*,Auto">
+              <StackPanel x:Name="SettingsHeader" Grid.Row="0" Margin="18,17,18,12" Spacing="9">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="{Binding TaskTitle}" FontSize="22" FontWeight="Bold"/>
+                  <Border Grid.Column="1" Background="#233552" Padding="10,6" CornerRadius="8">
+                    <TextBlock Text="WORKFLOW" Foreground="#C4D3E9" FontSize="11"/>
+                  </Border>
+                </Grid>
+                <TextBlock Text="{Binding TaskTagline}" Foreground="#B2C4DF"
+                           FontSize="13" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding TaskWarning}" Foreground="#F3BD77"
+                           IsVisible="{Binding HasTaskWarning}" FontSize="12" TextWrapping="Wrap"/>
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,5,0,0">
+                  <Button x:Name="QuickModeButton" Grid.Column="0" Content="Quick profiles"
+                          Classes="mode" Classes.active="{Binding QuickMode}" Click="QuickMode_Click"/>
+                  <Button x:Name="AdvancedModeButton" Grid.Column="1" Content="Advanced presets"
+                          Classes="mode" Classes.active="{Binding AdvancedMode}"
+                          Click="AdvancedMode_Click"/>
+                </Grid>
+              </StackPanel>
+              <ScrollViewer Grid.Row="1" x:Name="SettingsViewport" VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
               <StackPanel Margin="18" Spacing="13">
-                <StackPanel Spacing="4">
-                  <TextBlock Text="{Binding TaskTitle}" FontSize="19" FontWeight="Bold"/>
-                  <TextBlock Text="{Binding TaskTagline}" Foreground="#A3B9D6"
-                             FontSize="12" TextWrapping="Wrap"/>
-                  <TextBlock Text="{Binding TaskWarning}" Foreground="#E4BC80"
-                             FontSize="11" TextWrapping="Wrap"/>
-                </StackPanel>
-
-                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                  <Button Grid.Column="0" Content="Quick · Purpose"
-                          Classes="secondary" Click="QuickMode_Click"/>
-                  <Button Grid.Column="1" Content="Advanced · 51 presets"
-                          Classes="secondary" Click="AdvancedMode_Click"/>
-                </Grid>
-                <Border Height="1" Background="#32435A"/>
-
                 <StackPanel IsVisible="{Binding QuickMode}" Spacing="10">
                   <TextBlock Text="PURPOSE PROFILE" Classes="label"/>
                   <ComboBox ItemsSource="{Binding Profiles}"
@@ -314,6 +318,45 @@
                              FontSize="12" TextWrapping="Wrap" Foreground="#C3B8FF"/>
                 </Border>
 
+                <StackPanel x:Name="TrimOptions" IsVisible="{Binding IsTrimTask}" Spacing="9">
+                  <Border Height="1" Background="#32435A"/>
+                  <TextBlock Text="TRIM RANGE · SECONDS" Classes="label"/>
+                  <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                    <StackPanel Grid.Column="0" Spacing="5">
+                      <TextBlock Text="Start" Foreground="#B8CAE1" FontSize="12"/>
+                      <TextBox Text="{Binding TrimStart, Mode=TwoWay}" PlaceholderText="0"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="5">
+                      <TextBlock Text="End · 0 for source end" Foreground="#B8CAE1" FontSize="12"/>
+                      <TextBox Text="{Binding TrimEnd, Mode=TwoWay}" PlaceholderText="0"/>
+                    </StackPanel>
+                  </Grid>
+                </StackPanel>
+                <StackPanel x:Name="VideoQualityOptions"
+                            IsVisible="{Binding HasVideoQuality}" Spacing="7">
+                  <TextBlock Text="VIDEO QUALITY · CRF" Classes="label"/>
+                  <Grid ColumnDefinitions="90,*" ColumnSpacing="12">
+                    <TextBox Grid.Column="0" Text="{Binding Quality, Mode=TwoWay}"/>
+                    <TextBlock Grid.Column="1" Text="Lower CRF generally means higher quality."
+                               FontSize="11" Foreground="#9CB4D0" TextWrapping="Wrap"
+                               VerticalAlignment="Center"/>
+                  </Grid>
+                </StackPanel>
+                <StackPanel x:Name="ImageQualityOptions"
+                            IsVisible="{Binding HasImageQuality}" Spacing="7">
+                  <TextBlock Text="IMAGE QUALITY" Classes="label"/>
+                  <Grid ColumnDefinitions="90,*" ColumnSpacing="12">
+                    <TextBox Grid.Column="0" Text="{Binding ImageQuality, Mode=TwoWay}"/>
+                    <TextBlock Grid.Column="1" Text="0 = preset; 1–100 = override."
+                               FontSize="11" Foreground="#9CB4D0" TextWrapping="Wrap"
+                               VerticalAlignment="Center"/>
+                  </Grid>
+                </StackPanel>
+                <StackPanel x:Name="AudioOptions" IsVisible="{Binding HasAudioOptions}">
+                  <CheckBox Content="Normalize audio volume"
+                            IsChecked="{Binding Normalize, Mode=TwoWay}" FontSize="12"/>
+                </StackPanel>
+                <Border Height="1" Background="#32435A"/>
                 <TextBlock Text="SAVE OUTPUTS TO" Classes="label"/>
                 <TextBox Text="{Binding OutputDirectory, Mode=TwoWay}"
                          PlaceholderText="Choose an output folder" FontSize="12"/>
@@ -330,36 +373,32 @@
                 <TextBlock Text="Rename is the safest default: existing files are never replaced."
                            Foreground="#91A7C5" FontSize="10" TextWrapping="Wrap"/>
 
-                <Expander Header="Conversion settings" IsExpanded="False">
+                <Expander Header="Additional settings" IsExpanded="False">
                   <StackPanel Margin="4,10,4,6" Spacing="8">
-                    <TextBlock Text="Video quality (CRF)" Classes="label"/>
-                    <TextBox Text="{Binding Quality, Mode=TwoWay}" PlaceholderText="23"/>
-                    <TextBlock Text="Image quality (0 = preset, 1–100 override)" Classes="label"/>
-                    <TextBox Text="{Binding ImageQuality, Mode=TwoWay}" PlaceholderText="0"/>
-                    <TextBlock Text="Trim start (seconds)" Classes="label"/>
-                    <TextBox Text="{Binding TrimStart, Mode=TwoWay}" PlaceholderText="0"/>
-                    <TextBlock Text="Trim end (seconds; 0 = source end)" Classes="label"/>
-                    <TextBox Text="{Binding TrimEnd, Mode=TwoWay}" PlaceholderText="0"/>
                     <TextBlock Text="Playback speed" Classes="label"/>
                     <TextBox Text="{Binding Speed, Mode=TwoWay}" PlaceholderText="1"/>
-                    <CheckBox Content="Normalize audio volume"
-                              IsChecked="{Binding Normalize, Mode=TwoWay}" FontSize="11"/>
                     <CheckBox Content="Full decode output verification (slower)"
-                              IsChecked="{Binding FullDecode, Mode=TwoWay}" FontSize="11"/>
+                              IsChecked="{Binding FullDecode, Mode=TwoWay}" FontSize="12"/>
                   </StackPanel>
                 </Expander>
 
-                <Border Height="1" Background="#32435A"/>
-                <Button Content="Start conversion" Classes="primary"
-                        HorizontalAlignment="Stretch" IsEnabled="{Binding CanStart}"
-                        Click="Convert_Click"/>
-                <Button Content="Cancel active batch" Classes="secondary"
-                        HorizontalAlignment="Stretch" IsEnabled="{Binding CanCancel}"
-                        Click="Cancel_Click"/>
-                <TextBlock Text="FFmpeg output is staged and validated before the engine publishes it."
-                           TextWrapping="Wrap" Foreground="#8EA5C2" FontSize="10"/>
               </StackPanel>
             </ScrollViewer>
+              <Border x:Name="SettingsActions" Grid.Row="2" Background="#15243A"
+                      BorderBrush="#31425C" BorderThickness="0,1,0,0"
+                      Padding="18,13">
+                <StackPanel Spacing="9">
+                  <Button x:Name="StartConversionButton" Content="Start conversion"
+                          Classes="primary" HorizontalAlignment="Stretch" MinHeight="43"
+                          IsEnabled="{Binding CanStart}" Click="Convert_Click"/>
+                  <Button Content="Cancel active batch" Classes="secondary"
+                          IsVisible="{Binding IsRunning}" HorizontalAlignment="Stretch"
+                          Click="Cancel_Click"/>
+                  <TextBlock Text="Outputs are staged and validated before publication."
+                             Foreground="#A0B6D2" FontSize="11" TextWrapping="Wrap"/>
+                </StackPanel>
+              </Border>
+            </Grid>
           </Border>
         </Grid>
       </Grid>
