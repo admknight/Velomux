@@ -318,7 +318,7 @@
                              FontSize="12" TextWrapping="Wrap" Foreground="#C3B8FF"/>
                 </Border>
 
-                <StackPanel x:Name="TrimOptions" IsVisible="{Binding IsTrimTask}" Spacing="9">
+                <StackPanel x:Name="TrimOptions" IsVisible="{Binding ShowTrimOptions}" Spacing="9">
                   <Border Height="1" Background="#32435A"/>
                   <TextBlock Text="TRIM RANGE · SECONDS" Classes="label"/>
                   <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
@@ -337,7 +337,7 @@
                   <TextBlock Text="VIDEO QUALITY · CRF" Classes="label"/>
                   <Grid ColumnDefinitions="90,*" ColumnSpacing="12">
                     <TextBox Grid.Column="0" Text="{Binding Quality, Mode=TwoWay}"/>
-                    <TextBlock Grid.Column="1" Text="Lower CRF generally means higher quality."
+                    <TextBlock Grid.Column="1" Text="23 respects the preset quality hint when provided; other values override."
                                FontSize="11" Foreground="#9CB4D0" TextWrapping="Wrap"
                                VerticalAlignment="Center"/>
                   </Grid>
