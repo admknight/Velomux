@@ -122,7 +122,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
     {
         get => _quickMode;
         set { if (_quickMode == value) return; _quickMode = value; Notify();
-            Notify(nameof(AdvancedMode)); Notify(nameof(SelectedPresetName)); }
+            Notify(nameof(AdvancedMode)); Notify(nameof(SelectedPresetName));
+            Notify(nameof(ShowTrimOptions)); Notify(nameof(HasAudioOptions)); }
     }
     public bool AdvancedMode => !QuickMode;
     public FlowOption? SelectedTask
@@ -136,7 +137,8 @@ public sealed class MainViewModel : INotifyPropertyChanged
             foreach (var property in new[] { nameof(IsVideoTask), nameof(IsAudioTask),
                 nameof(IsImageTask), nameof(IsExtractTask), nameof(IsCompressTask),
                 nameof(IsRewrapTask), nameof(IsTrimTask), nameof(HasTaskWarning),
-                nameof(HasVideoQuality), nameof(HasImageQuality), nameof(HasAudioOptions) })
+                nameof(HasVideoQuality), nameof(HasImageQuality),
+                nameof(HasAudioOptions), nameof(ShowTrimOptions) })
                 Notify(property);
             Profiles.Clear();
             if (value != null)
@@ -166,7 +168,10 @@ public sealed class MainViewModel : INotifyPropertyChanged
     public bool IsTrimTask => SelectedTask?.Id == "trim";
     public bool HasVideoQuality => IsVideoTask || IsCompressTask || IsTrimTask;
     public bool HasImageQuality => IsImageTask;
-    public bool HasAudioOptions => IsAudioTask || IsExtractTask;
+    // Every option previously available in Advanced mode remains accessible.
+    // Quick mode shows only controls relevant to the active task.
+    public bool ShowTrimOptions => IsTrimTask || AdvancedMode;
+    public bool HasAudioOptions => IsAudioTask || IsExtractTask || AdvancedMode;
     public ProfileOption? SelectedProfile
     {
         get => _selectedProfile;
