@@ -155,6 +155,12 @@ public partial class MainWindow : Window
         {
             Vm.ChooseTask(flow.Id);
             UpdateLayout();
+            UpdateWorkspaceHeight();
+            UpdateLayout();
+            var workflowBottom = actionFooter.TranslatePoint(
+                new Point(actionFooter.Bounds.Width, actionFooter.Bounds.Height), this);
+            if (workflowBottom == null || workflowBottom.Value.Y > Bounds.Height + 1)
+                throw new InvalidOperationException("Hidden action footer in workflow: " + flow.Id);
             if (trim.IsVisible != (flow.Id == "trim") ||
                 image.IsVisible != (flow.Id == "images") ||
                 audio.IsVisible != (flow.Id is "audio" or "extract") ||
@@ -231,12 +237,33 @@ public partial class MainWindow : Window
         }
     }
 
+    private void QueueTaskLayoutRefresh()
+    {
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            UpdateLayout();
+            UpdateWorkspaceHeight();
+            UpdateLayout();
+        }, Avalonia.Threading.DispatcherPriority.Background);
+    }
     private void ChooseTask_Click(object? sender, RoutedEventArgs e)
     {
-        if (sender is Button button && button.Tag is string id) Vm.ChooseTask(id);
+        if (sender is Button button && button.Tag is string id)
+        {
+            Vm.ChooseTask(id);
+            QueueTaskLayoutRefresh();
+        }
     }
-    private void QuickMode_Click(object? sender, RoutedEventArgs e) => Vm.QuickMode = true;
-    private void AdvancedMode_Click(object? sender, RoutedEventArgs e) => Vm.QuickMode = false;
+    private void QuickMode_Click(object? sender, RoutedEventArgs e)
+    {
+        Vm.QuickMode = true;
+        QueueTaskLayoutRefresh();
+    }
+    private void AdvancedMode_Click(object? sender, RoutedEventArgs e)
+    {
+        Vm.QuickMode = false;
+        QueueTaskLayoutRefresh();
+    }
 
     private async void AddFiles_Click(object? sender, RoutedEventArgs e)
     {
