@@ -37,7 +37,7 @@
     <Style Selector="Button.workflow">
       <Setter Property="Background" Value="#1C2A40"/>
       <Setter Property="Foreground" Value="#DCE8FC"/>
-      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="FontSize" Value="13"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
       <Setter Property="HorizontalContentAlignment" Value="Left"/>
       <Setter Property="BorderThickness" Value="1"/>
@@ -75,7 +75,7 @@
     </Style>
     <Style Selector="TextBox">
       <Setter Property="CornerRadius" Value="8"/>
-      <Setter Property="MinHeight" Value="34"/>
+      <Setter Property="MinHeight" Value="38"/>
     </Style>
   </Window.Styles>
 
@@ -250,9 +250,7 @@
                 <TextBlock Text="ACTIVITY" Classes="label"/>
                 <ListBox Height="90" ItemsSource="{Binding Activity}"
                          Background="#0C1829" BorderThickness="0"
-                         CornerRadius="8" FontSize="10" Foreground="#AFC5DD"/>
-                <TextBlock Text="{Binding Status}" FontSize="11" Foreground="#BBCCEA"
-                           TextWrapping="Wrap" MaxLines="3"/>
+                         CornerRadius="8" FontSize="12" Foreground="#AFC5DD"/>
               </StackPanel>
             </Grid>
           </Border>
@@ -293,16 +291,18 @@
                     </ComboBox.ItemTemplate>
                   </ComboBox>
                   <TextBlock Text="{Binding ProfileDetail}" TextWrapping="Wrap"
-                             Foreground="#A7BBD5" FontSize="11"/>
+                             Foreground="#A7BBD5" FontSize="12"/>
                 </StackPanel>
 
                 <StackPanel IsVisible="{Binding AdvancedMode}" Spacing="9">
                   <TextBlock Text="ENCODER PRESETS" Classes="label"/>
-                  <ComboBox ItemsSource="{Binding PresetFamilies}"
-                            SelectedItem="{Binding PresetFamily, Mode=TwoWay}"
-                            MinHeight="36"/>
-                  <TextBox Text="{Binding PresetSearch, Mode=TwoWay}"
-                           PlaceholderText="Search 51 available presets"/>
+                  <Grid ColumnDefinitions="150,*" ColumnSpacing="8">
+                    <ComboBox Grid.Column="0" ItemsSource="{Binding PresetFamilies}"
+                              SelectedItem="{Binding PresetFamily, Mode=TwoWay}"
+                              MinHeight="38"/>
+                    <TextBox Grid.Column="1" Text="{Binding PresetSearch, Mode=TwoWay}"
+                             PlaceholderText="Search matching presets"/>
+                  </Grid>
                   <ComboBox ItemsSource="{Binding VisiblePresets}"
                             SelectedItem="{Binding SelectedPreset, Mode=TwoWay}"
                             MinHeight="38">
@@ -314,8 +314,11 @@
                   </ComboBox>
                 </StackPanel>
                 <Border Background="#1C2C45" Padding="11,9" CornerRadius="8">
-                  <TextBlock Text="{Binding SelectedPresetName}"
-                             FontSize="12" TextWrapping="Wrap" Foreground="#C3B8FF"/>
+                  <StackPanel Spacing="5">
+                    <TextBlock Text="SELECTED OUTPUT" Classes="label"/>
+                    <TextBlock Text="{Binding SelectedPresetName}" FontSize="13"
+                               FontWeight="SemiBold" TextWrapping="Wrap" Foreground="#CFC5FF"/>
+                  </StackPanel>
                 </Border>
 
                 <StackPanel x:Name="TrimOptions" IsVisible="{Binding ShowTrimOptions}" Spacing="9">
@@ -358,10 +361,13 @@
                 </StackPanel>
                 <Border Height="1" Background="#32435A"/>
                 <TextBlock Text="SAVE OUTPUTS TO" Classes="label"/>
-                <TextBox Text="{Binding OutputDirectory, Mode=TwoWay}"
-                         PlaceholderText="Choose an output folder" FontSize="12"/>
-                <Button Content="Browse destination..." Classes="secondary"
-                        HorizontalAlignment="Left" Click="ChooseFolder_Click"/>
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                  <TextBox Grid.Column="0" Text="{Binding OutputDirectory, Mode=TwoWay}"
+                           PlaceholderText="Choose an output folder" FontSize="12"
+                           VerticalAlignment="Center"/>
+                  <Button Grid.Column="1" Content="Browse" Classes="secondary"
+                          Click="ChooseFolder_Click" VerticalAlignment="Center"/>
+                </Grid>
                 <CheckBox Content="Preserve source folder hierarchy"
                           IsChecked="{Binding PreserveFolders, Mode=TwoWay}" FontSize="11"/>
 
