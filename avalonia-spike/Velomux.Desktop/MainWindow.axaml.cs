@@ -182,6 +182,22 @@ public partial class MainWindow : Window
         var size = new PixelSize(
             Math.Max(1, (int)Math.Ceiling(Bounds.Width)),
             Math.Max(1, (int)Math.Ceiling(Bounds.Height)));
+        // Capture the actual renderer for EVERY workflow. The prior CI only
+        // captured Video, so a broken Trim or Images layout went unnoticed.
+        foreach (var task in Vm.Tasks)
+        {
+            Vm.ChooseTask(task.Id);
+            UpdateLayout();
+            string perTask = Path.Combine(dir, "Avalonia-Windows-" + task.Id + ".png");
+            using var snapshot = new RenderTargetBitmap(size);
+            snapshot.Render(this);
+            snapshot.Save(perTask, PngBitmapEncoderOptions.Default);
+            if (!File.Exists(perTask) || new FileInfo(perTask).Length < 5000)
+                throw new IOException("Could not render workflow: " + task.Id);
+            StartupDiagnostics.Record("GUI_TASK_SCREENSHOT: " + task.Id + " -> " + perTask);
+        }
+        Vm.ChooseTask("video");
+        UpdateLayout();
         string path = Path.Combine(dir, "Avalonia-Windows-Startup.png");
         using var bitmap = new RenderTargetBitmap(size);
         bitmap.Render(this);
