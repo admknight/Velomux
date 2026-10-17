@@ -133,16 +133,40 @@ public sealed class MainViewModel : INotifyPropertyChanged
             if (ReferenceEquals(_selectedTask, value)) return;
             _selectedTask = value;
             Notify(); Notify(nameof(TaskTitle)); Notify(nameof(TaskTagline)); Notify(nameof(TaskWarning));
+            foreach (var property in new[] { nameof(IsVideoTask), nameof(IsAudioTask),
+                nameof(IsImageTask), nameof(IsExtractTask), nameof(IsCompressTask),
+                nameof(IsRewrapTask), nameof(IsTrimTask), nameof(HasTaskWarning),
+                nameof(HasVideoQuality), nameof(HasImageQuality), nameof(HasAudioOptions) })
+                Notify(property);
             Profiles.Clear();
             if (value != null)
                 foreach (var p in value.Profiles) Profiles.Add(p);
             SelectedProfile = Profiles.FirstOrDefault();
+            // Advanced choices must remain relevant to the selected workflow,
+            // rather than defaulting to all 51 unrelated formats.
+            PresetFamily = value?.Id switch
+            {
+                "audio" or "extract" => "Audio",
+                "images" => "Image",
+                _ => "Video"
+            };
             Notify(nameof(SelectedPresetName));
         }
     }
     public string TaskTitle => SelectedTask?.Title ?? "Choose a task";
     public string TaskTagline => SelectedTask?.Tagline ?? "Select what you want to do";
     public string TaskWarning => SelectedTask?.Warning ?? "";
+    public bool HasTaskWarning => !string.IsNullOrWhiteSpace(TaskWarning);
+    public bool IsVideoTask => SelectedTask?.Id == "video";
+    public bool IsAudioTask => SelectedTask?.Id == "audio";
+    public bool IsImageTask => SelectedTask?.Id == "images";
+    public bool IsExtractTask => SelectedTask?.Id == "extract";
+    public bool IsCompressTask => SelectedTask?.Id == "compress";
+    public bool IsRewrapTask => SelectedTask?.Id == "rewrap";
+    public bool IsTrimTask => SelectedTask?.Id == "trim";
+    public bool HasVideoQuality => IsVideoTask || IsCompressTask || IsTrimTask;
+    public bool HasImageQuality => IsImageTask;
+    public bool HasAudioOptions => IsAudioTask || IsExtractTask;
     public ProfileOption? SelectedProfile
     {
         get => _selectedProfile;
