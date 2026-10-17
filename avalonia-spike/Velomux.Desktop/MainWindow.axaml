@@ -397,7 +397,7 @@
                   <Button x:Name="StartConversionButton" Content="Start conversion"
                           Classes="primary" HorizontalAlignment="Stretch" MinHeight="43"
                           IsEnabled="{Binding CanStart}" Click="Convert_Click"/>
-                  <Button Content="Cancel active batch" Classes="secondary"
+                  <Button x:Name="CancelActiveButton" Content="Cancel active batch" Classes="secondary"
                           IsVisible="{Binding IsRunning}" HorizontalAlignment="Stretch"
                           Click="Cancel_Click"/>
                   <TextBlock Text="Outputs are staged and validated before publication."
