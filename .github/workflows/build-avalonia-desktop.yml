@@ -113,8 +113,18 @@ jobs:
           if (Test-Path $log) { Get-Content $log }
           if ($process.ExitCode -ne 0) { throw "Published GUI startup test failed with exit $($process.ExitCode)" }
           if (-not (Test-Path $log) -or (Get-Content $log -Raw) -notmatch 'DESKTOP_STARTUP_TEST: PASS') { throw 'No runtime evidence of an opened, full-preset Avalonia window' }
-          $png = Join-Path $PWD 'avalonia-spike/publish/ui-qa/Avalonia-Windows-Startup.png'
-          if (-not (Test-Path $png) -or (Get-Item $png).Length -lt 5000) { throw 'Real rendered full-workstation screenshot missing' }
+          $screens = Join-Path $PWD 'avalonia-spike/publish/ui-qa'
+          $names = @('video','audio','images','extract','compress','rewrap','trim')
+          foreach ($taskName in $names) {
+            $png = Join-Path $screens "Avalonia-Windows-$taskName.png"
+            if (-not (Test-Path -LiteralPath $png) -or (Get-Item -LiteralPath $png).Length -lt 5000) {
+              throw "Real rendered Avalonia workflow screenshot missing: $taskName"
+            }
+          }
+          $startup = Join-Path $screens 'Avalonia-Windows-Startup.png'
+          if (-not (Test-Path $startup) -or (Get-Item $startup).Length -lt 5000) {
+            throw 'Real rendered full-workstation screenshot missing'
+          }
       - name: Assemble and checksum ready-to-run Avalonia Windows portable build
         shell: pwsh
         run: |
@@ -224,6 +234,6 @@ jobs:
             avalonia-spike/installer-output/Velomux-Avalonia-Portable-0.4.0-Win-x64.zip
             avalonia-spike/installer-output/SHA256SUMS.txt
             avalonia-spike/installer-output/BUILD_PROVENANCE.txt
-            avalonia-spike/publish/ui-qa/Avalonia-Windows-Startup.png
+            avalonia-spike/publish/ui-qa/*.png
           if-no-files-found: error
           retention-days: 14
