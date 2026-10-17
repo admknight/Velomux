@@ -78,7 +78,7 @@ public partial class MainWindow : Window
         navigation.IsVisible = compact;
         var columns = this.FindControl<Grid>("WorkspaceColumns");
         if (columns != null)
-            columns.ColumnDefinitions[1].Width = new GridLength(compact ? 340 : 410);
+            columns.ColumnDefinitions[1].Width = new GridLength(compact ? 420 : 540);
         var activity = this.FindControl<StackPanel>("ActivityPanel");
         if (activity != null) activity.IsVisible = Bounds.Height >= 790;
     }
@@ -95,7 +95,12 @@ public partial class MainWindow : Window
         // Constrain the real viewport, not its content, and retain one scrollbar.
         double available = Math.Max(250, Bounds.Height - top.Value.Y - 18);
         columns.Height = available;
-        scroller.Height = Math.Max(220, available - 2);
+        var header = this.FindControl<StackPanel>("SettingsHeader");
+        var actions = this.FindControl<Border>("SettingsActions");
+        double headerHeight = header?.Bounds.Height > 0 ? header.Bounds.Height : 165;
+        double actionHeight = actions?.Bounds.Height > 0 ? actions.Bounds.Height : 105;
+        // The title/mode selector and primary action are fixed; only options scroll.
+        scroller.Height = Math.Max(150, available - headerHeight - actionHeight - 12);
     }
 
     internal void AssertInitialUiReady()
@@ -105,7 +110,7 @@ public partial class MainWindow : Window
         UpdateWorkspaceHeight();
         UpdateLayout();
         if (!Vm.IsCatalogLoaded || Vm.Tasks.Count != 7 ||
-            Vm.Profiles.Count < 2 || Vm.VisiblePresets.Count != 51)
+            Vm.Profiles.Count < 2 || Vm.VisiblePresets.Count == 0)
             throw new InvalidOperationException("Task and preset controls are not populated.");
         if (!Vm.IsQueueEmpty)
             throw new InvalidOperationException("Initial queue must be empty for GUI startup QA.");
@@ -128,6 +133,41 @@ public partial class MainWindow : Window
                 throw new InvalidOperationException(
                     $"Off-screen panel detected: {key}, bottom-right={bottomRight}, panel={panel.Bounds}, window={Bounds}.");
         }
+        var actionFooter = this.FindControl<Border>("SettingsActions")
+            ?? throw new InvalidOperationException("Conversion actions missing.");
+        var startButton = this.FindControl<Button>("StartConversionButton")
+            ?? throw new InvalidOperationException("Start conversion button missing.");
+        if (!actionFooter.IsVisible || !startButton.IsVisible)
+            throw new InvalidOperationException("Conversion actions are obscured.");
+        var bottom = actionFooter.TranslatePoint(
+            new Point(actionFooter.Bounds.Width, actionFooter.Bounds.Height), this);
+        if (bottom == null || bottom.Value.Y > Bounds.Height + 1)
+            throw new InvalidOperationException("Conversion actions extend below the window.");
+        // Exercise all seven workflows against the same rendered controls. This
+        // catches the old problem where switching tasks only changed a heading.
+        var trim = this.FindControl<StackPanel>("TrimOptions")!;
+        var image = this.FindControl<StackPanel>("ImageQualityOptions")!;
+        var video = this.FindControl<StackPanel>("VideoQualityOptions")!;
+        var audio = this.FindControl<StackPanel>("AudioOptions")!;
+        var quick = this.FindControl<Button>("QuickModeButton")!;
+        var advanced = this.FindControl<Button>("AdvancedModeButton")!;
+        foreach (var flow in Vm.Tasks)
+        {
+            Vm.ChooseTask(flow.Id);
+            UpdateLayout();
+            if (trim.IsVisible != (flow.Id == "trim") ||
+                image.IsVisible != (flow.Id == "images") ||
+                audio.IsVisible != (flow.Id is "audio" or "extract") ||
+                video.IsVisible != (flow.Id is "video" or "compress" or "trim"))
+                throw new InvalidOperationException("Task settings mismatch for " + flow.Id);
+            if (!quick.Classes.Contains("active") || advanced.Classes.Contains("active"))
+                throw new InvalidOperationException("Quick mode visual state missing.");
+            if (Vm.VisiblePresets.Count == 0 || Vm.VisiblePresets.Any(x =>
+                !string.Equals(x.Group, Vm.PresetFamily, StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException("Incorrect preset family for " + flow.Id);
+        }
+        Vm.ChooseTask("video");
+        UpdateLayout();
         var sidebar = this.FindControl<Border>("NavSidebar")!;
         var bar = this.FindControl<WrapPanel>("CompactTaskBar")!;
         if (Bounds.Width < 1260 ? (sidebar.IsVisible || !bar.IsVisible)
